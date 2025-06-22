@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <title> E-vite </title>
+        <link rel="stylesheet" href="styles.css">
+    </head>
+    <body>
+        
+        <h1> E-vite </h1>
+        <div class="create_event_form">
+            <form id="event_form">
+                <label for="event_name"> Event Name </label><br>
+                <input placeholder="Disc Golf" type="text" id="event_name" name="event_name" value="Annual Summer BBQ" required><br>
+                <label for="event_date">Event Date:</label><br>
+                <input type="datetimes" id="event_date" name="event_date" value="2025-06-06,11:00 AM" required><br>
+                <label for="event_location"> Event location:</label><br>
+                <input placeholder="3310W 184 St Olathe Kansas" type="text" id="event_location" name="event_location" value="3310W 184 St Olathe Kansas"required><br>
+                <label for="participants"> Enter participants:</label><br>
+                <textarea rows="5" placeholder="janeaf@gmail.com, johnsd@gmail.com" id="participants" name="participants" > janeaf@gmail.com, johnsd@gmail.com </textarea><br>
+                <div class="create_event_button">
+                    <button type="submit" > Create Event </button>
+                </div>
+            </form>
+        </div>
+        <div id="status_message">
+            <p> Data Recieved </p>
+        </div>
+        <div id="database_status_message">
+            <p> database Data Recieved </p>
+        </div>
+        <div class="chat_box"id="chat_bot">
+            <label for="user_message"> Message </label> <br>
+            <input placeholder="Hello" type="text" id="user" value="Hello there, what a sunny day it is" ></input>
+            <label for="ai_message"> AI </label> <br>
+            <output id="ai_message"></output>
+        </div>
+        <p id="ai_message"></p>
+        <div id="form_data">
+                <h3>Event Details </h3>
+                <p><strong>Location:</strong> <span id="display-location"></span></p>
+                <p><strong>Event:</strong> <span id="display-event"></span></p>
+                <p><strong>Date:</strong> <span id="display-date"></span></p>
+                <p><strong>Participants:</strong><br><span id="display-participants"></span></p>
+        </div>
+
+         <div id="event_list" >
+         </div>
+        
+    </body>
+    <script src="script.js">
+    </script>
+</html>

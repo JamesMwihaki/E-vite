@@ -1,0 +1,7 @@
+{
+  "dependencies": {
+    "@google/generative-ai": "^0.24.1",
+    "generative-ai": "^0.1.4",
+    "server": "^1.0.41"
+  }
+}
