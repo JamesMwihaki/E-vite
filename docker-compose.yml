@@ -1,0 +1,46 @@
+services:
+  db:
+    image: postgres:16 # Specify a version for stability (e.g., postgres:16, postgres:15-alpine)
+    restart: always    # Ensures the container restarts if it crashes or Docker restarts
+    environment:
+      POSTGRES_USER: James          # Optional: Specifies the default user (defaults to 'postgres')
+      POSTGRES_PASSWORD: fullStack2025  # REQUIRED: Set a strong password!
+      POSTGRES_DB: grain_store        # Optional: Specifies the default database to create
+    ports:
+      - "5432:5432" # Maps host port 5432 to container port 5432
+    # OPTIONAL: Data Persistence (HIGHLY RECOMMENDED FOR REAL DATA)
+    volumes:
+      - db-data:/var/lib/postgresql/data # This creates a Docker volume named 'db-data'
+                                         # and mounts it to the PostgreSQL data directory.
+                                         # Data persists even if the container is removed.
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready"]
+      interval: 1s
+      timeout: 5s
+      retries: 10
+  backend-app:
+    build: ./backend
+    container_name: node_backend_app
+    restart: always
+    ports:
+      - "3001:3001"
+    environment:
+      DB_USER: James
+      DB_PASSWORD: fullStack2025
+      DB_NAME: grain_store
+      DB_HOST: db
+      DB_PORT: 5432
+      PORT: 3001
+    depends_on:
+      db:
+        condition: service_healthy
+  adminer:
+    image: adminer
+    restart: always
+    ports:
+      - "8080:8080"
+    depends_on:
+      db:
+        condition: service_healthy
+volumes:
+  db-data:
