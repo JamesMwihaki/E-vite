@@ -130,6 +130,8 @@
 Invitation should be both in app and out
 - when a user sends and invite if the recipient doesn't have that app
   they should be able to rsvp on an email or message or a link.
+- Recommend public event to friends
+- Create a private event based on the public event
 
 
 Login Page
