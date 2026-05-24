@@ -1,0 +1,337 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Create Event · E-vite</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            font-family: 'Courier New', monospace;
+            background: #f0f0f0;
+            color: #111;
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        /* ASCII-styled frame: dashed CSS borders + `+` glyphs at the 4 corners. */
+        .ascii-frame {
+            position: relative;
+            border: 1px dashed #111;
+            background: #fff;
+            font-family: 'Courier New', monospace;
+        }
+        .ascii-frame > .corner {
+            position: absolute;
+            line-height: 1;
+            font-weight: bold;
+            -webkit-user-select: none;
+            user-select: none;
+            pointer-events: none;
+        }
+        .ascii-frame > .corner.tl { top: -0.55em; left: -0.3ch;  }
+        .ascii-frame > .corner.tr { top: -0.55em; right: -0.3ch; }
+        .ascii-frame > .corner.bl { bottom: -0.55em; left: -0.3ch;  }
+        .ascii-frame > .corner.br { bottom: -0.55em; right: -0.3ch; }
+
+        /* Corners INSIDE the white terminal mask against white. */
+        .terminal .ascii-frame > .corner { background: #fff; padding: 0 2px; }
+        /* The outer terminal frame's corners sit on the gray body background. */
+        .terminal.ascii-frame > .corner { background: #f0f0f0; padding: 0 2px; }
+
+        .terminal {
+            box-shadow: 4px 4px 0 rgba(0, 0, 0, 0.15);
+            width: 100%;
+            max-width: 560px;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .section { padding: 14px 20px; }
+        .section + .section { border-top: 1px dashed #111; }
+
+        .topbar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-weight: bold;
+            gap: 8px;
+        }
+        .topbar .title { flex: 1; text-align: center; }
+
+        .clickable {
+            cursor: pointer;
+            color: inherit;
+            text-decoration: none;
+        }
+        .clickable:hover { background: #eee; }
+
+        .field-label {
+            display: block;
+            margin-bottom: 6px;
+        }
+
+        .input-frame {
+            padding: 6px 10px;
+            margin-bottom: 14px;
+        }
+        .input-frame:last-child { margin-bottom: 0; }
+        .input-frame input,
+        .input-frame textarea {
+            background: transparent;
+            border: none;
+            outline: none;
+            font-family: inherit;
+            font-size: inherit;
+            color: inherit;
+            width: 100%;
+        }
+        .input-frame textarea { resize: vertical; min-height: 2.5em; }
+
+        .row { display: flex; gap: 14px; }
+        .row > .field-group { flex: 1; min-width: 0; }
+
+        .friend-picker-frame {
+            padding: 10px;
+            margin-bottom: 14px;
+        }
+        .selected-chips {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+            margin-bottom: 8px;
+        }
+        .selected-chips:empty { display: none; }
+
+        .chip {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            background: #111;
+            color: #fff;
+            padding: 2px 8px;
+            font-size: 0.85em;
+            line-height: 1.3;
+        }
+        .chip .chip-close {
+            cursor: pointer;
+            font-weight: bold;
+        }
+        .chip .chip-close:hover { color: #f99; }
+
+        .friend-search-input {
+            width: 100%;
+            background: transparent;
+            border: none;
+            border-bottom: 1px dashed #999;
+            outline: none;
+            font-family: inherit;
+            font-size: inherit;
+            padding: 4px 6px;
+            margin-bottom: 4px;
+        }
+        .friend-search-input::placeholder { color: #999; }
+
+        .friend-list {
+            max-height: 160px;
+            overflow-y: auto;
+        }
+        .friend-list::-webkit-scrollbar { width: 6px; }
+        .friend-list::-webkit-scrollbar-thumb { background: #111; }
+
+        .friend-row {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 6px 10px;
+            cursor: pointer;
+        }
+        .friend-row:hover { background: #f5f5f5; }
+        .friend-row.selected {
+            background: #111;
+            color: #fff;
+        }
+        .friend-row.selected:hover { background: #111; }
+        .friend-row.hidden { display: none; }
+        .friend-row .friend-name { font-weight: bold; }
+        .friend-row .friend-handle { color: #666; font-size: 0.9em; }
+        .friend-row.selected .friend-handle { color: #ccc; }
+
+        .friends-empty {
+            padding: 10px 12px;
+            text-align: center;
+            color: #777;
+            font-style: italic;
+        }
+        .friends-empty a { color: inherit; }
+        .picker-meta {
+            font-size: 0.85em;
+            color: #666;
+            margin-bottom: 6px;
+        }
+
+        .event-type-row {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            cursor: pointer;
+        }
+
+        .button-row {
+            display: flex;
+            justify-content: center;
+            gap: 14px;
+            flex-wrap: wrap;
+        }
+
+        .ascii-button {
+            display: inline-block;
+            padding: 8px 18px;
+            background: #fff;
+            font-family: inherit;
+            font-size: inherit;
+            color: inherit;
+            cursor: pointer;
+        }
+        .ascii-button:hover { background: #eee; }
+
+        .nav-bar {
+            display: flex;
+            justify-content: space-around;
+            flex-wrap: wrap;
+            gap: 4px;
+        }
+        .nav-item { cursor: pointer; padding: 2px 6px; color: inherit; text-decoration: none; }
+        .nav-item.active { font-weight: bold; background: #111; color: #fff; }
+        .nav-item:hover { background: #eee; }
+        .nav-item.active:hover { background: #111; color: #fff; }
+
+        @media (max-width: 480px) {
+            body { padding: 12px; }
+            .section { padding: 12px 14px; }
+            .row { flex-direction: column; gap: 0; }
+            .nav-bar { font-size: 13px; }
+        }
+    </style>
+</head>
+<body>
+    <div class="terminal ascii-frame">
+        <span class="corner tl">+</span>
+        <span class="corner tr">+</span>
+        <span class="corner bl">+</span>
+        <span class="corner br">+</span>
+
+        <div class="section topbar">
+            <a href="landing-page.html" class="clickable">&lt; Back</a>
+            <span class="title">Create Event</span>
+            <span class="clickable" id="logout-btn">[LOGOUT]</span>
+        </div>
+
+        <div class="section">
+            <label class="field-label" for="event_name">Event Title</label>
+            <div class="ascii-frame input-frame">
+                <span class="corner tl">+</span>
+                <span class="corner tr">+</span>
+                <span class="corner bl">+</span>
+                <span class="corner br">+</span>
+                <input type="text" id="event_name" placeholder="Enter event title..." value="Disc Golf Sunday">
+            </div>
+
+            <label class="field-label" for="eventDescription">Description</label>
+            <div class="ascii-frame input-frame">
+                <span class="corner tl">+</span>
+                <span class="corner tr">+</span>
+                <span class="corner bl">+</span>
+                <span class="corner br">+</span>
+                <textarea id="eventDescription" placeholder="Tell guests about your event...">come as you are</textarea>
+            </div>
+
+            <div class="row">
+                <div class="field-group">
+                    <label class="field-label" for="event_date">Date</label>
+                    <div class="ascii-frame input-frame">
+                        <span class="corner tl">+</span>
+                        <span class="corner tr">+</span>
+                        <span class="corner bl">+</span>
+                        <span class="corner br">+</span>
+                        <input type="date" id="event_date" value="2025-10-18">
+                    </div>
+                </div>
+                <div class="field-group">
+                    <label class="field-label" for="eventTime">Time</label>
+                    <div class="ascii-frame input-frame">
+                        <span class="corner tl">+</span>
+                        <span class="corner tr">+</span>
+                        <span class="corner bl">+</span>
+                        <span class="corner br">+</span>
+                        <input type="time" id="eventTime" value="11:00">
+                    </div>
+                </div>
+            </div>
+
+            <label class="field-label" for="event_location">Location</label>
+            <div class="ascii-frame input-frame">
+                <span class="corner tl">+</span>
+                <span class="corner tr">+</span>
+                <span class="corner bl">+</span>
+                <span class="corner br">+</span>
+                <input type="text" id="event_location" placeholder="Address or venue name..." value="3310W 184 St Olathe Kansas">
+            </div>
+
+            <label class="field-label">Event Type</label>
+            <label class="event-type-row">
+                <input type="checkbox" id="private" name="eventType" value="private" checked>
+                Private - Invitation only
+            </label>
+        </div>
+
+        <div class="section">
+            <label class="field-label">Invite from your Tree</label>
+            <div class="picker-meta" id="picker-meta">0 selected</div>
+            <div class="ascii-frame friend-picker-frame">
+                <span class="corner tl">+</span>
+                <span class="corner tr">+</span>
+                <span class="corner bl">+</span>
+                <span class="corner br">+</span>
+                <div id="selected-chips" class="selected-chips"></div>
+                <input type="text" id="friend-search" class="friend-search-input" placeholder="Search friends...">
+                <div id="friends-list" class="friend-list"></div>
+            </div>
+
+            <label class="field-label" for="guest_emails" style="margin-top: 14px;">Or invite by email</label>
+            <div class="ascii-frame input-frame">
+                <span class="corner tl">+</span>
+                <span class="corner tr">+</span>
+                <span class="corner bl">+</span>
+                <span class="corner br">+</span>
+                <textarea id="guest_emails" placeholder="Comma-separated emails for guests not on the platform..."></textarea>
+            </div>
+
+        </div>
+
+        <div class="section">
+            <div class="button-row">
+                <button type="button" class="ascii-frame ascii-button" id="create_event">
+                    <span class="corner tl">+</span>
+                    <span class="corner tr">+</span>
+                    <span class="corner bl">+</span>
+                    <span class="corner br">+</span>
+                    CREATE EVENT
+                </button>
+            </div>
+        </div>
+
+        <div class="section nav-bar">
+            <a href="landing-page.html" class="nav-item">[HOME]</a>
+            <a href="my-evites.html" class="nav-item">[MY E-VITES]</a>
+            <a href="tree.html" class="nav-item">[MY TREE]</a>
+            <a href="profile.html" class="nav-item">[PROFILE]</a>
+        </div>
+    </div>
+    <script src="../js/auth.js"></script>
+    <script src="../js/create-event.js"></script>
+</body>
+</html>

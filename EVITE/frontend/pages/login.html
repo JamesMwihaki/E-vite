@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Log in · E-vite</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            font-family: 'Courier New', monospace;
+            background: #f0f0f0;
+            color: #111;
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+
+        .ascii-frame {
+            position: relative;
+            border: 1px dashed #111;
+            background: #fff;
+            font-family: 'Courier New', monospace;
+        }
+        .ascii-frame > .corner {
+            position: absolute;
+            line-height: 1;
+            font-weight: bold;
+            -webkit-user-select: none;
+            user-select: none;
+            pointer-events: none;
+        }
+        .ascii-frame > .corner.tl { top: -0.55em; left: -0.3ch;  }
+        .ascii-frame > .corner.tr { top: -0.55em; right: -0.3ch; }
+        .ascii-frame > .corner.bl { bottom: -0.55em; left: -0.3ch;  }
+        .ascii-frame > .corner.br { bottom: -0.55em; right: -0.3ch; }
+
+        .terminal .ascii-frame > .corner { background: #fff; padding: 0 2px; }
+        .terminal.ascii-frame > .corner  { background: #f0f0f0; padding: 0 2px; }
+
+        .terminal {
+            box-shadow: 4px 4px 0 rgba(0, 0, 0, 0.15);
+            width: 100%;
+            max-width: 420px;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .section { padding: 16px 22px; }
+        .section + .section { border-top: 1px dashed #111; }
+
+        .brand {
+            text-align: center;
+            font-weight: bold;
+            font-size: 1.1em;
+        }
+
+        .field-label { display: block; margin-bottom: 6px; }
+
+        .input-frame {
+            padding: 6px 10px;
+            margin-bottom: 14px;
+        }
+        .input-frame:last-child { margin-bottom: 0; }
+        .input-frame input {
+            background: transparent;
+            border: none;
+            outline: none;
+            font-family: inherit;
+            font-size: inherit;
+            color: inherit;
+            width: 100%;
+        }
+
+        .button-row {
+            display: flex;
+            justify-content: center;
+            margin-top: 4px;
+        }
+
+        .ascii-button {
+            display: inline-block;
+            padding: 8px 22px;
+            background: #fff;
+            font-family: inherit;
+            font-size: inherit;
+            color: inherit;
+            cursor: pointer;
+        }
+        .ascii-button:hover { background: #eee; }
+
+        .footer-link {
+            text-align: center;
+            font-size: 0.9em;
+        }
+        .footer-link a { color: inherit; }
+
+        .error {
+            color: #a00;
+            text-align: center;
+            margin-top: 8px;
+            min-height: 1.2em;
+        }
+    </style>
+</head>
+<body>
+    <div class="terminal ascii-frame">
+        <span class="corner tl">+</span>
+        <span class="corner tr">+</span>
+        <span class="corner bl">+</span>
+        <span class="corner br">+</span>
+
+        <div class="section brand">E-vite</div>
+
+        <div class="section">
+            <label class="field-label" for="username">Username</label>
+            <div class="ascii-frame input-frame">
+                <span class="corner tl">+</span>
+                <span class="corner tr">+</span>
+                <span class="corner bl">+</span>
+                <span class="corner br">+</span>
+                <input type="text" id="username" autocomplete="username">
+            </div>
+
+            <label class="field-label" for="password">Password</label>
+            <div class="ascii-frame input-frame">
+                <span class="corner tl">+</span>
+                <span class="corner tr">+</span>
+                <span class="corner bl">+</span>
+                <span class="corner br">+</span>
+                <input type="password" id="password" autocomplete="current-password">
+            </div>
+
+            <div class="button-row">
+                <button type="button" class="ascii-frame ascii-button" id="login_btn">
+                    <span class="corner tl">+</span>
+                    <span class="corner tr">+</span>
+                    <span class="corner bl">+</span>
+                    <span class="corner br">+</span>
+                    [ LOG IN ]
+                </button>
+            </div>
+
+            <div class="error" id="error"></div>
+        </div>
+
+        <div class="section footer-link">
+            New here? <a href="signup.html">Create an account</a>
+        </div>
+    </div>
+    <script src="../js/login.js"></script>
+</body>
+</html>

@@ -1,251 +1,137 @@
-const { GoogleGenerativeAI } = require('@google/generative-ai');
+// Load .env in non-production environments. In Vercel, env vars are injected
+// directly so dotenv is a no-op (it just doesn't find a .env file).
+require('dotenv').config({ path: require('path').join(__dirname, '..', '.env') });
+
 const express = require('express');
-const cors = require('cors'); //Required if your frontend is on a different origin (e.g., different port or domain)
-const app = express();
-const backendEndpoint = "http://localhost:3001/api/events";
-const ai_post = "http://localhost:3001/api/ai_output"
+const cors = require('cors');
+const session = require('express-session');
+const pgSession = require('connect-pg-simple')(session);
+const { GoogleGenerativeAI } = require('@google/generative-ai');
+
+const logger = require('./utils/logger');
+const db = require('./db/database');
+const eventsRouter = require('./routes/events');
+const rsvpRouter = require('./routes/rsvp');
+const invitationsRouter = require('./routes/invitations');
+const authRouter = require('./routes/auth');
+const usersRouter = require('./routes/users');
+const friendsRouter = require('./routes/friends');
 
 const port = process.env.PORT || 3001;
-const { Pool } = require('pg')
+const isProd = process.env.NODE_ENV === 'production';
+const SESSION_SECRET = process.env.SESSION_SECRET || 'dev-only-change-me-in-production';
+if (SESSION_SECRET === 'dev-only-change-me-in-production') {
+    logger.warn('SESSION_SECRET is using the dev fallback — set it in env for production');
+}
 
-const Gemini_api_key = process.env.GEMINI_API_KEY||"AIzaSyChPRPXnlnuPzquy5bnhCiOCYTf7Dgbyxk";
-const genAI = new GoogleGenerativeAI(Gemini_api_key);
+const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
+if (!GEMINI_API_KEY) {
+    logger.warn('GEMINI_API_KEY not set — /api/ai_input will return 503');
+}
+const genAI = GEMINI_API_KEY ? new GoogleGenerativeAI(GEMINI_API_KEY) : null;
 
-// Enable CORS for all routes (important for development when frontend and backend are on different ports)
-app.use(cors());
-// Middleware to parse JSON bodies from incoming requests
-// This is crucial for accepting data from your fetch POST request
+const app = express();
+
+// Trust the proxy in front of us (Vercel) so secure cookies + req.ip behave correctly.
+app.set('trust proxy', 1);
+
+// CORS: in production frontend + API share the same origin so this is mostly
+// a no-op. `origin: true` keeps local-dev cross-origin work fine.
+app.use(cors({ origin: true, credentials: true }));
 app.use(express.json());
 
+app.use(session({
+    store: new pgSession({
+        pool: db.pool,
+        tableName: 'session',
+        createTableIfMissing: true,
+    }),
+    secret: SESSION_SECRET,
+    resave: false,
+    saveUninitialized: false,
+    cookie: {
+        httpOnly: true,
+        sameSite: 'lax',
+        secure: isProd,
+        maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days
+    },
+}));
 
-const dbConfig = {
-    user: process.env.DB_USER || 'James',
-    host: process.env.DB_HOST || 'db', // 'db' is the service name from docker-compose.yml
-    database: process.env.DB_NAME || 'grain_store',
-    password: process.env.DB_PASSWORD || 'fullStack2025',
-    port: process.env.DB_PORT || 5432,
-};
+app.get('/health', (req, res) => res.json({ ok: true }));
 
-const pool = new Pool(dbConfig)
+app.use(authRouter);
+app.use(usersRouter);
+app.use(friendsRouter);
+app.use(eventsRouter);
+app.use(rsvpRouter);
+app.use(invitationsRouter);
 
-pool.connect()
-    .then(async client => {
-        console.log("connected to the db");
-        const create_message_board = 
-        `
-            CREATE TABLE IF NOT EXISTS messages(
-                id SERIAL PRIMARY KEY,
-                user_message TEXT,
-                ai_response TEXT,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            );
-        `
-
-        //create a table if one doesn't exist
-        const events_table = 
-        `
-            CREATE TABLE IF NOT EXISTS events_table(
-                id SERIAL PRIMARY KEY,
-                title VARCHAR(255) NOT NULL,
-                description TEXT,
-                event_date DATE NOT NULL,
-                event_time TIME,
-                location TEXT,
-                event_type TEXT,
-                will_attend  BOOLEAN,  
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            );
-        `;
-
-        try{
-            await client.query(create_message_board);
-            console.log("Message_Boards table created or already exists");
-            await client.query(events_table);
-            console.log("event_table table created or already exists");
-
-            console.log("events created or arleady exists");
-            client.release();
-        }catch(err){
-            console.error('Error creating the table', err.stack );
-            client.release();
-            process.exit(1);
-        };        
-    })
-    .catch(err => {
-        console.error('Database connection error:', err.stack);
-        process.exit(1);
-    });
-
-/*
-// Define the POST endpoint that matches your fetch URL
-app.post('/create-event', (req, res) => {
-    const eventData = req.body; // The parsed JSON data will be available here
-    console.log('Received event data:');
-    console.log(eventData);
-    res.status(200).json({
-        message: 'Event successfully created!',
-        receivedData: eventData // Optionally send back the received data for confirmation
-    });
-});
-
-*/
-
-app.post('/api/create_events', async (req, res) => {
-    const {title, description, date, time, location, type, willAttend } = req.body;
-    console.log("Data Recieved in the backend but api/create_events");
-    
-    const queryText =
-    `
-        INSERT INTO events_table (title, description, event_date, event_time, location, event_type, will_attend)
-            VALUES ($1, $2, $3, $4, $5, $6, $7)
-            RETURNING id;
-    `;
-
-    const values = [title, description, date, time, location, type, willAttend];
-
-    try{
-        const insert_event_items = await pool.query(queryText, values);
-        console.log("Items saved: ", insert_event_items.rows[0].id);
-
-        res.status(201).json({
-            message: 'Event successfully saved in the db',
-            eventID: insert_event_items.rows[0].id
-        });
-
-    }catch (error){
-        console.log("error inserting items into create table: ", error);
+app.post('/api/ai_input', async (req, res) => {
+    if (!genAI) {
+        return res.status(503).json({ message: 'AI not configured: set GEMINI_API_KEY' });
     }
-
-});
-
-
-app.post('/api/events', async (req, res) => {
-    const { eventName, eventLocation, eventTime, eventParticipants } = req.body; 
-    console.log('Backend received req.body:', req.body);
-
-    if (!eventName || !eventLocation || !eventTime) {
-        return res.status(400).json({ message: 'Missing required event data (eventName, eventLocation, eventTimestamp).' });
-    }
- 
-    const queryText =
-    `
-        INSERT INTO events (event_name, event_location, event_time, event_participants)
-            VALUES ($1, $2, $3, $4)
-            RETURNING id;
-    `;
-
-
-    const values = [eventName, eventLocation, eventTime, eventParticipants];
-    try{
-        const result = await pool.query(queryText, values);
-        const newEvent = result.rows[0];
-
-        console.log('Event saved in the db:', newEvent);
-
-        res.status(201).json({
-            message: 'Event successfully saved in the db',
-            newEvent: newEvent,
-        });
-
-    }catch(error){
-        console.error('error saving event to the db', error.stack);
-        res.status(500).json({
-            message: 'Failed to save to the db',
-            error: error.message
-        });
-    }
-});
-
-app.post('/api/ai_input', async(req, res) => {
     const { ask_ai } = req.body;
-    console.log("ask this to the ai", ask_ai);
-
-    let aiResponse;
-
-    try{
-        const model = genAI.getGenerativeModel({model: "gemini-1.5-flash" });
-        const prompt = ask_ai;
-
-        const result = await model.generateContent(prompt);
-        const message = await result.response;
-        aiResponse = message.text();
-
-
-    }catch(error){
-        console.error('Error generating ai response', error.stack);
-        res.status(500).json({message:'Api failed', error: error.message});
+    if (!ask_ai) {
+        return res.status(400).json({ message: 'ask_ai is required' });
     }
 
-    try{
-        const queryText =
-        `
+    try {
+        const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
+        const result = await model.generateContent(ask_ai);
+        const aiResponse = result.response.text();
+
+        const insertText = `
             INSERT INTO messages (user_message, ai_response)
-                VALUES ($1, $2)
-                RETURNING id;
+            VALUES ($1, $2)
+            RETURNING id;
         `;
-        const data = [ask_ai, aiResponse];
-        const dbResult = await pool.query(queryText, data);
-        const newMessage = dbResult.rows[0];
+        const dbResult = await db.query(insertText, [ask_ai, aiResponse]);
 
-        console.log('massages saved in the db:', newMessage);
-
-        res.status(201).json({ 
+        res.status(201).json({
             message: 'Success',
-            aiResponse: aiResponse,
-            messageId: newMessage.id
+            aiResponse,
+            messageId: dbResult.rows[0].id,
         });
-
-        }catch(error){
-            console.error('error saving event to the db', error.stack);
-            res.status(200).json({
-                message: 'Failed to save ai message to the db',
-                error: error.message
-            });
-        }
+    } catch (error) {
+        logger.error(`AI request failed: ${error.message}`);
+        res.status(500).json({ message: 'AI request failed', error: error.message });
+    }
 });
-
 
 app.get('/api/ai_output', async (req, res) => {
-    console.log("Request received at /api/ai_input");
-    const get_messages = `SELECT id user_message, ai_response FROM messages`;
-
-    try{
-        const result = await pool.query(get_messages);
-        //console.log("Events fetched successfully", result.rows.length, "events");
-        res.json(result.rows[result.rows.length - 1]);
-    }catch (err) {
-        console.error("error fetching the events", err.message);
-        res.status(500).json({ error: 'Internal server error', details: err.message });
+    try {
+        const result = await db.query(
+            'SELECT id, user_message, ai_response FROM messages ORDER BY id DESC LIMIT 1'
+        );
+        res.json(result.rows[0] || null);
+    } catch (error) {
+        logger.error(`Fetch ai_output failed: ${error.message}`);
+        res.status(500).json({ error: 'Internal server error', details: error.message });
     }
 });
 
-
-app.get('/api/create_events', async (req, res) => {
-    console.log("Request received at /api/create_events");
-    const get_all_events  = `SELECT title, description, event_date, event_time, location, event_type, will_attend FROM events_table`;
-
-    try{
-        const result = await pool.query(get_all_events);
-        //console.log("Events fetched successfully", result.rows.length, "events");
-        res.json(result.rows);
-    }catch (err) {
-        console.error("error fetching the events", err.message);
-        res.status(500).json({ error: 'Internal server error', details: err.message });
-    }
+// Run migrations on startup. Idempotent (CREATE TABLE IF NOT EXISTS), so
+// re-running on every Vercel cold start is fine.
+const dbReady = db.connect_to_database().catch((err) => {
+    logger.error(`Database init failed: ${err.message}`);
 });
 
+// Only listen when invoked directly (local dev: `node server.js`). When
+// required as a module (Vercel api/index.js), the export below is enough.
+if (require.main === module) {
+    dbReady.then(() => {
+        app.listen(port, () => {
+            logger.info(`Server listening at http://localhost:${port}`);
+        });
+    });
 
-// Start the server
-app.listen(port, () => {
-    console.log(`Server listening at http://localhost:${port}`);
-});
-
-
-// Handle graceful shutdown
-process.on('SIGINT', () => {
-    console.log('Shutting down server and closing database connection...');
-    pool.end(() => {
-        console.log('PostgreSQL client disconnected.');
+    process.on('SIGINT', async () => {
+        logger.info('Shutting down...');
+        try { await db.pool.end(); } catch (err) {
+            logger.error(`Error closing pool: ${err.message}`);
+        }
         process.exit(0);
     });
-});
+}
+
+module.exports = app;

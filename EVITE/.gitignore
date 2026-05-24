@@ -1,5 +1,6 @@
-#ignore the node modules
 node_modules/
-
-
-
+.env
+.env.local
+.vercel/
+.DS_Store
+*.log

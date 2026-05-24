@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Profile · E-vite</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            font-family: 'Courier New', monospace;
+            background: #f0f0f0;
+            color: #111;
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .ascii-frame {
+            position: relative;
+            border: 1px dashed #111;
+            background: #fff;
+            font-family: 'Courier New', monospace;
+        }
+        .ascii-frame > .corner {
+            position: absolute;
+            line-height: 1;
+            font-weight: bold;
+            -webkit-user-select: none;
+            user-select: none;
+            pointer-events: none;
+        }
+        .ascii-frame > .corner.tl { top: -0.55em; left: -0.3ch;  }
+        .ascii-frame > .corner.tr { top: -0.55em; right: -0.3ch; }
+        .ascii-frame > .corner.bl { bottom: -0.55em; left: -0.3ch;  }
+        .ascii-frame > .corner.br { bottom: -0.55em; right: -0.3ch; }
+
+        .terminal .ascii-frame > .corner { background: #fff; padding: 0 2px; }
+        .terminal.ascii-frame > .corner  { background: #f0f0f0; padding: 0 2px; }
+
+        .terminal {
+            box-shadow: 4px 4px 0 rgba(0, 0, 0, 0.15);
+            width: 100%;
+            max-width: 560px;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .section { padding: 16px 22px; }
+        .section + .section { border-top: 1px dashed #111; }
+
+        .topbar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-weight: bold;
+            gap: 8px;
+        }
+        .topbar .title { flex: 1; text-align: center; }
+
+        .clickable {
+            cursor: pointer;
+            color: inherit;
+            text-decoration: none;
+        }
+        .clickable:hover { background: #eee; }
+
+        .section-label {
+            text-align: center;
+            font-weight: bold;
+            margin-bottom: 12px;
+            letter-spacing: 0.5px;
+        }
+        .section-label::before { content: '[ '; }
+        .section-label::after  { content: ' ]'; }
+
+        .avatar-block {
+            text-align: center;
+        }
+        .avatar {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 64px;
+            height: 64px;
+            border: 2px solid #111;
+            border-radius: 50%;
+            font-size: 28px;
+            font-weight: bold;
+            background: #111;
+            color: #fff;
+            margin-bottom: 10px;
+        }
+        .full-name {
+            font-weight: bold;
+            font-size: 1.1em;
+        }
+        .handle {
+            color: #555;
+            margin-top: 2px;
+        }
+        .joined {
+            font-size: 0.85em;
+            color: #777;
+            margin-top: 6px;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 12px;
+            text-align: center;
+        }
+        .stat {
+            padding: 8px;
+        }
+        .stat .num {
+            font-size: 1.6em;
+            font-weight: bold;
+        }
+        .stat .label {
+            font-size: 0.8em;
+            color: #555;
+            text-transform: lowercase;
+        }
+
+        .field-label { display: block; margin-bottom: 6px; }
+        .input-frame { padding: 6px 10px; margin-bottom: 14px; }
+        .input-frame input {
+            background: transparent;
+            border: none;
+            outline: none;
+            font-family: inherit;
+            font-size: inherit;
+            color: inherit;
+            width: 100%;
+        }
+        .row { display: flex; gap: 14px; }
+        .row > .field-group { flex: 1; min-width: 0; }
+
+        .button-row {
+            display: flex;
+            justify-content: center;
+            margin-top: 4px;
+        }
+        .ascii-button {
+            display: inline-block;
+            padding: 8px 22px;
+            background: #fff;
+            font-family: inherit;
+            font-size: inherit;
+            color: inherit;
+            cursor: pointer;
+        }
+        .ascii-button:hover { background: #eee; }
+
+        .message {
+            text-align: center;
+            margin-top: 8px;
+            min-height: 1.2em;
+            font-size: 0.9em;
+        }
+        .message.error { color: #a00; }
+        .message.success { color: #1d6b2e; }
+
+        .nav-bar {
+            display: flex;
+            justify-content: space-around;
+            flex-wrap: wrap;
+            gap: 4px;
+        }
+        .nav-item {
+            cursor: pointer;
+            padding: 2px 6px;
+            color: inherit;
+            text-decoration: none;
+        }
+        .nav-item.active { font-weight: bold; background: #111; color: #fff; }
+        .nav-item:hover { background: #eee; }
+        .nav-item.active:hover { background: #111; color: #fff; }
+
+        @media (max-width: 480px) {
+            body { padding: 12px; }
+            .section { padding: 12px 14px; }
+            .row { flex-direction: column; gap: 0; }
+            .stats-grid { grid-template-columns: 1fr; }
+            .nav-bar { font-size: 13px; }
+        }
+    </style>
+</head>
+<body>
+    <div class="terminal ascii-frame">
+        <span class="corner tl">+</span>
+        <span class="corner tr">+</span>
+        <span class="corner bl">+</span>
+        <span class="corner br">+</span>
+
+        <div class="section topbar">
+            <a href="landing-page.html" class="clickable">&lt; Back</a>
+            <span class="title">Profile</span>
+            <span class="clickable" id="logout-btn">[LOGOUT]</span>
+        </div>
+
+        <div class="section avatar-block">
+            <div class="avatar" id="avatar">?</div>
+            <div class="full-name" id="full-name"></div>
+            <div class="handle" id="handle"></div>
+            <div class="joined" id="joined"></div>
+        </div>
+
+        <div class="section">
+            <div class="section-label">Stats</div>
+            <div class="stats-grid">
+                <div class="stat">
+                    <div class="num" id="stat-friends">—</div>
+                    <div class="label">friends</div>
+                </div>
+                <div class="stat">
+                    <div class="num" id="stat-created">—</div>
+                    <div class="label">created</div>
+                </div>
+                <div class="stat">
+                    <div class="num" id="stat-going">—</div>
+                    <div class="label">attending</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="section">
+            <div class="section-label">Edit Profile</div>
+
+            <div class="row">
+                <div class="field-group">
+                    <label class="field-label" for="first_name">First name</label>
+                    <div class="ascii-frame input-frame">
+                        <span class="corner tl">+</span>
+                        <span class="corner tr">+</span>
+                        <span class="corner bl">+</span>
+                        <span class="corner br">+</span>
+                        <input type="text" id="first_name" autocomplete="given-name">
+                    </div>
+                </div>
+                <div class="field-group">
+                    <label class="field-label" for="last_name">Last name</label>
+                    <div class="ascii-frame input-frame">
+                        <span class="corner tl">+</span>
+                        <span class="corner tr">+</span>
+                        <span class="corner bl">+</span>
+                        <span class="corner br">+</span>
+                        <input type="text" id="last_name" autocomplete="family-name">
+                    </div>
+                </div>
+            </div>
+
+            <label class="field-label" for="email">Email</label>
+            <div class="ascii-frame input-frame">
+                <span class="corner tl">+</span>
+                <span class="corner tr">+</span>
+                <span class="corner bl">+</span>
+                <span class="corner br">+</span>
+                <input type="email" id="email" autocomplete="email">
+            </div>
+
+            <div class="button-row">
+                <button type="button" class="ascii-frame ascii-button" id="save_profile_btn">
+                    <span class="corner tl">+</span>
+                    <span class="corner tr">+</span>
+                    <span class="corner bl">+</span>
+                    <span class="corner br">+</span>
+                    [ SAVE CHANGES ]
+                </button>
+            </div>
+            <div class="message" id="profile_message"></div>
+        </div>
+
+        <div class="section">
+            <div class="section-label">Change Password</div>
+
+            <label class="field-label" for="current_password">Current password</label>
+            <div class="ascii-frame input-frame">
+                <span class="corner tl">+</span>
+                <span class="corner tr">+</span>
+                <span class="corner bl">+</span>
+                <span class="corner br">+</span>
+                <input type="password" id="current_password" autocomplete="current-password">
+            </div>
+
+            <label class="field-label" for="new_password">New password (8+ characters)</label>
+            <div class="ascii-frame input-frame">
+                <span class="corner tl">+</span>
+                <span class="corner tr">+</span>
+                <span class="corner bl">+</span>
+                <span class="corner br">+</span>
+                <input type="password" id="new_password" autocomplete="new-password">
+            </div>
+
+            <div class="button-row">
+                <button type="button" class="ascii-frame ascii-button" id="save_password_btn">
+                    <span class="corner tl">+</span>
+                    <span class="corner tr">+</span>
+                    <span class="corner bl">+</span>
+                    <span class="corner br">+</span>
+                    [ UPDATE PASSWORD ]
+                </button>
+            </div>
+            <div class="message" id="password_message"></div>
+        </div>
+
+        <div class="section nav-bar">
+            <a href="landing-page.html" class="nav-item">[HOME]</a>
+            <a href="my-evites.html" class="nav-item">[MY E-VITES]</a>
+            <a href="tree.html" class="nav-item">[MY TREE]</a>
+            <a href="profile.html" class="nav-item active">[PROFILE]</a>
+        </div>
+    </div>
+
+    <script src="../js/auth.js"></script>
+    <script src="../js/profile.js"></script>
+</body>
+</html>
