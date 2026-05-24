@@ -1,14 +1,16 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "rewrites": [
-    { "source": "/api/:path*", "destination": "/api/index" },
-    { "source": "/", "destination": "/frontend/pages/landing-page.html" },
-    { "source": "/login", "destination": "/frontend/pages/login.html" },
-    { "source": "/signup", "destination": "/frontend/pages/signup.html" },
-    { "source": "/tree", "destination": "/frontend/pages/tree.html" },
-    { "source": "/profile", "destination": "/frontend/pages/profile.html" },
-    { "source": "/create-event", "destination": "/frontend/pages/create-event.html" },
-    { "source": "/my-evites", "destination": "/frontend/pages/my-evites.html" }
+    { "source": "/api/:path*", "destination": "/api/index" }
+  ],
+  "redirects": [
+    { "source": "/",              "destination": "/frontend/pages/landing-page.html", "permanent": false },
+    { "source": "/login",         "destination": "/frontend/pages/login.html",        "permanent": false },
+    { "source": "/signup",        "destination": "/frontend/pages/signup.html",       "permanent": false },
+    { "source": "/tree",          "destination": "/frontend/pages/tree.html",         "permanent": false },
+    { "source": "/profile",       "destination": "/frontend/pages/profile.html",      "permanent": false },
+    { "source": "/create-event",  "destination": "/frontend/pages/create-event.html", "permanent": false },
+    { "source": "/my-evites",     "destination": "/frontend/pages/my-evites.html",    "permanent": false }
   ],
   "functions": {
     "api/index.js": {
