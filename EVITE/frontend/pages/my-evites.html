@@ -110,12 +110,13 @@
             text-overflow: ellipsis;
             white-space: nowrap;
         }
-        .event-more {
-            justify-self: end;
-            font-size: 0.85em;
-            font-weight: bold;
-            margin-top: 4px;
+        .event-card {
+            cursor: pointer;
+            transition: background 0.15s ease;
         }
+        .event-card:hover { background: #f5f5f5; }
+        .event-card:hover > .corner { background: #f5f5f5; }
+        .event-card:focus-visible { outline: 2px solid #111; }
 
         .rsvp-block {
             margin-top: 10px;

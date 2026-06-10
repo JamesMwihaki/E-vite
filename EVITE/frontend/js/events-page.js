@@ -94,7 +94,6 @@ function buildEventCard(event, rsvpStatus) {
         <span class="field event-location"></span>
         <span class="field event-date"></span>
         <span class="field event-description"></span>
-        <a class="event-more clickable">[ VIEW DETAILS &gt; ]</a>
         ${showRsvp ? `
             <div class="rsvp-block">
                 <div class="rsvp-label">[ RSVP ]</div>
@@ -107,7 +106,17 @@ function buildEventCard(event, rsvpStatus) {
         ` : ''}
     `;
 
-    card.querySelector('.event-more').href = `event.html?id=${event.id}`;
+    // The whole card opens the detail page; clicks on the RSVP buttons don't.
+    card.addEventListener('click', (e) => {
+        if (e.target.closest('.rsvp-btn')) return;
+        window.location.href = `event.html?id=${event.id}`;
+    });
+    card.setAttribute('tabindex', '0');
+    card.setAttribute('role', 'link');
+    card.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') window.location.href = `event.html?id=${event.id}`;
+    });
+
     card.querySelector('.event-title').textContent = event.title || '';
     card.querySelector('.event-location').textContent = `Location: ${event.location || ''}`;
     card.querySelector('.event-date').textContent = formatEventDate(event.event_date);
