@@ -10,6 +10,7 @@
     { "source": "/tree",          "destination": "/frontend/pages/tree.html",         "permanent": false },
     { "source": "/profile",       "destination": "/frontend/pages/profile.html",      "permanent": false },
     { "source": "/create-event",  "destination": "/frontend/pages/create-event.html", "permanent": false },
+    { "source": "/event",         "destination": "/frontend/pages/event.html",        "permanent": false },
     { "source": "/my-evites",     "destination": "/frontend/pages/my-evites.html",    "permanent": false }
   ],
   "functions": {

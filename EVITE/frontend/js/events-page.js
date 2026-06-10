@@ -94,6 +94,7 @@ function buildEventCard(event, rsvpStatus) {
         <span class="field event-location"></span>
         <span class="field event-date"></span>
         <span class="field event-description"></span>
+        <a class="event-more clickable">[ VIEW DETAILS &gt; ]</a>
         ${showRsvp ? `
             <div class="rsvp-block">
                 <div class="rsvp-label">[ RSVP ]</div>
@@ -106,6 +107,7 @@ function buildEventCard(event, rsvpStatus) {
         ` : ''}
     `;
 
+    card.querySelector('.event-more').href = `event.html?id=${event.id}`;
     card.querySelector('.event-title').textContent = event.title || '';
     card.querySelector('.event-location').textContent = `Location: ${event.location || ''}`;
     card.querySelector('.event-date').textContent = formatEventDate(event.event_date);
