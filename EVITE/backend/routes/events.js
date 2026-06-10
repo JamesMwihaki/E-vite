@@ -25,9 +25,17 @@ router.post('/api/create_event', requireAuth, async (req, res) => {
             if (!Number.isInteger(sourceId)) {
                 return res.status(400).json({ message: 'source_event_id must be an integer' });
             }
-            const source = await db.query('SELECT event_type FROM events WHERE id = $1', [sourceId]);
+            const source = await db.query(
+                `SELECT event_type,
+                        (event_date + event_time) < NOW() - INTERVAL '12 hours' AS passed
+                 FROM events WHERE id = $1`,
+                [sourceId]
+            );
             if (source.rows.length === 0 || source.rows[0].event_type !== 'public') {
                 return res.status(400).json({ message: 'source_event_id must reference an existing public event' });
+            }
+            if (source.rows[0].passed) {
+                return res.status(400).json({ message: 'Cannot create an e-vite from a passed event' });
             }
         }
 

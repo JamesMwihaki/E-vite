@@ -43,11 +43,13 @@ async function loadEvents() {
         const rsvps = rsvpsRes.ok ? await rsvpsRes.json() : [];
         const rsvpMap = new Map(rsvps.map(r => [r.event_id, r.status]));
 
-        const exclusive = events.filter(e => e.event_type === 'private');
-        const publicEvents = events.filter(e => e.event_type === 'public');
+        // Passed events are hidden from all lists (still reachable by link).
+        const upcoming = events.filter(e => !isPastEvent(e));
+        const exclusive = upcoming.filter(e => e.event_type === 'private');
+        const publicEvents = upcoming.filter(e => e.event_type === 'public');
 
-        renderList(exclusiveList, exclusive, rsvpMap, 'No exclusive e-vites yet');
-        renderList(publicList, publicEvents, rsvpMap, 'No public e-vites yet');
+        renderList(exclusiveList, exclusive, rsvpMap, 'No upcoming exclusive e-vites');
+        renderList(publicList, publicEvents, rsvpMap, 'No upcoming public e-vites');
     } catch (error) {
         console.error('Failed to load events:', error);
         renderError(exclusiveList, 'Error loading events');
@@ -183,6 +185,14 @@ async function saveRsvp(eventId, status) {
         alert('Could not save RSVP. Is the backend running?');
         return false;
     }
+}
+
+function isPastEvent(event) {
+    if (!event.event_date) return false;
+    const datePart = String(event.event_date).slice(0, 10);
+    const timePart = (event.event_time || '23:59:59').slice(0, 8);
+    const dt = new Date(`${datePart}T${timePart}`);
+    return !Number.isNaN(dt.getTime()) && dt < new Date();
 }
 
 function formatEventDate(eventTime) {

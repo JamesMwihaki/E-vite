@@ -17,6 +17,22 @@ router.post('/api/rsvp', requireAuth, async (req, res) => {
     }
 
     try {
+        // Event times are stored without a timezone and NOW() is UTC, so a
+        // strict comparison could reject RSVPs hours before the event is over
+        // in the user's local time. The 12h grace errs on the lenient side;
+        // the UI hides RSVP buttons at the precise local time anyway.
+        const eventCheck = await db.query(
+            `SELECT (event_date + event_time) < NOW() - INTERVAL '12 hours' AS passed
+             FROM events WHERE id = $1`,
+            [event_id]
+        );
+        if (eventCheck.rows.length === 0) {
+            return res.status(404).json({ message: 'Event not found' });
+        }
+        if (eventCheck.rows[0].passed) {
+            return res.status(400).json({ message: 'This event has passed — RSVPs are closed' });
+        }
+
         const queryText = `
             INSERT INTO rsvps (event_id, user_id, status)
             VALUES ($1, $2, $3)

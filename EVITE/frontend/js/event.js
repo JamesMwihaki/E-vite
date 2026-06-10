@@ -49,6 +49,9 @@ function render(data) {
     const { event, is_creator, my_rsvp, attendees, invitations } = data;
     currentEvent = event;
 
+    const when = eventDateTime(event.event_date, event.event_time);
+    const passed = when !== null && when < new Date();
+
     document.getElementById('loading-state').classList.add('hidden');
     document.getElementById('error-state').classList.add('hidden');
     document.getElementById('info-section').classList.remove('hidden');
@@ -85,9 +88,10 @@ function render(data) {
         basedOn.classList.add('hidden');
     }
 
-    // Any viewer can fork a public event into their own exclusive e-vite.
+    // Any viewer can fork a public event into their own exclusive e-vite —
+    // unless it has already happened.
     const forkSection = document.getElementById('fork-section');
-    if (event.event_type === 'public') {
+    if (event.event_type === 'public' && !passed) {
         forkSection.classList.remove('hidden');
         document.getElementById('fork-btn').href = `create-event.html?from=${event.id}`;
     } else {
@@ -97,9 +101,11 @@ function render(data) {
     renderAttendees(attendees);
 
     // Guests RSVP; the host doesn't RSVP to their own event.
-    if (!is_creator && event.event_type === 'private') {
+    if (!is_creator && event.event_type === 'private' && !passed) {
         document.getElementById('rsvp-section').classList.remove('hidden');
         wireRsvp(my_rsvp);
+    } else {
+        document.getElementById('rsvp-section').classList.add('hidden');
     }
 
     if (is_creator) {
