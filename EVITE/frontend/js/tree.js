@@ -63,12 +63,6 @@ const TRANSITION_MS = 350;
     await refreshAll();
 })();
 
-function setActive(element, navItem) {
-    document.querySelectorAll('.nav-item').forEach(item => item.classList.remove('active'));
-    element.classList.add('active');
-    console.log(`Navigating to: ${navItem}`);
-}
-
 async function refreshAll() {
     await Promise.all([loadRequests(), loadTree()]);
     if (searchInputEl.value.trim()) await runSearch();

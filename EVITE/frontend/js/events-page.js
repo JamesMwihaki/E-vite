@@ -15,16 +15,6 @@ const RSVPS_ENDPOINT = "/api/rsvps";
     loadEvents();
 })();
 
-function setActive(element, navItem) {
-    document.querySelectorAll('.nav-item').forEach(item => item.classList.remove('active'));
-    element.classList.add('active');
-    console.log(`Navigating to: ${navItem}`);
-}
-
-function returnHome() {
-    window.location.href = 'landing-page.html';
-}
-
 async function loadEvents() {
     const exclusiveList = document.getElementById('exclusive-list');
     const publicList = document.getElementById('public-list');
