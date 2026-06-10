@@ -223,6 +223,14 @@
         }
         .ascii-button:hover { background: #eee; }
 
+        .message {
+            text-align: center;
+            margin-top: 8px;
+            min-height: 1.2em;
+            font-size: 0.9em;
+        }
+        .message.error { color: #a00; }
+
         .nav-bar {
             display: flex;
             justify-content: space-around;
@@ -264,7 +272,7 @@
                 <span class="corner tr">+</span>
                 <span class="corner bl">+</span>
                 <span class="corner br">+</span>
-                <input type="text" id="event_name" placeholder="Enter event title..." value="Disc Golf Sunday">
+                <input type="text" id="event_name" placeholder="Enter event title...">
             </div>
 
             <label class="field-label" for="eventDescription">Description</label>
@@ -273,7 +281,7 @@
                 <span class="corner tr">+</span>
                 <span class="corner bl">+</span>
                 <span class="corner br">+</span>
-                <textarea id="eventDescription" placeholder="Tell guests about your event...">come as you are</textarea>
+                <textarea id="eventDescription" placeholder="Tell guests about your event..."></textarea>
             </div>
 
             <div class="row">
@@ -284,7 +292,7 @@
                         <span class="corner tr">+</span>
                         <span class="corner bl">+</span>
                         <span class="corner br">+</span>
-                        <input type="date" id="event_date" value="2025-10-18">
+                        <input type="date" id="event_date">
                     </div>
                 </div>
                 <div class="field-group">
@@ -294,7 +302,7 @@
                         <span class="corner tr">+</span>
                         <span class="corner bl">+</span>
                         <span class="corner br">+</span>
-                        <input type="time" id="eventTime" value="11:00">
+                        <input type="time" id="eventTime">
                     </div>
                 </div>
             </div>
@@ -305,7 +313,7 @@
                 <span class="corner tr">+</span>
                 <span class="corner bl">+</span>
                 <span class="corner br">+</span>
-                <input type="text" id="event_location" placeholder="Address or venue name..." value="3310W 184 St Olathe Kansas">
+                <input type="text" id="event_location" placeholder="Address or venue name...">
             </div>
 
             <label class="field-label">Event Type</label>
@@ -349,6 +357,7 @@
                     CREATE EVENT
                 </button>
             </div>
+            <div class="message" id="create_message"></div>
         </div>
         </main>
 

@@ -306,9 +306,30 @@ function fillEditForm() {
     // event_time arrives as HH:MM:SS; time inputs want HH:MM.
     document.getElementById('edit-time').value = (currentEvent.event_time || '').slice(0, 5);
     document.getElementById('edit-location').value = currentEvent.location || '';
+
+    // Guide the picker away from past days. The original date stays valid
+    // even if passed, so typo fixes on old events don't force a reschedule.
+    const now = new Date();
+    document.getElementById('edit-date').min =
+        `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
 }
 
 async function saveEdit(form, buttons, message) {
+    // A changed date/time must be in the future; keeping the original
+    // (possibly past) date is fine for fixing titles or descriptions.
+    const newDate = document.getElementById('edit-date').value;
+    const newTime = document.getElementById('edit-time').value;
+    const origDate = (currentEvent.event_date || '').slice(0, 10);
+    const origTime = (currentEvent.event_time || '').slice(0, 5);
+    if (newDate !== origDate || newTime !== origTime) {
+        const when = new Date(`${newDate}T${newTime}`);
+        if (Number.isNaN(when.getTime()) || when < new Date()) {
+            message.textContent = 'Pick a date and time from this moment forward.';
+            message.className = 'message error';
+            return;
+        }
+    }
+
     message.textContent = 'Saving...';
     message.className = 'message';
     try {

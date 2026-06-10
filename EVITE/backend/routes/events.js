@@ -5,6 +5,21 @@ const { requireAuth } = require('../middleware/auth');
 
 const router = express.Router();
 
+const DATE_REGEX = /^\d{4}-\d{2}-\d{2}$/;
+const TIME_REGEX = /^\d{2}:\d{2}(:\d{2})?$/;
+
+// True when the given date+time is in the past. Times are stored without a
+// timezone and NOW() is UTC, so the 12h grace keeps the check from rejecting
+// datetimes that are still upcoming in the user's local timezone — the
+// browser enforces the precise "from this moment forward" rule.
+async function isPastDateTime(date, time) {
+    const result = await db.query(
+        `SELECT ($1::date + $2::time) < NOW() - INTERVAL '12 hours' AS passed`,
+        [date, time]
+    );
+    return result.rows[0].passed;
+}
+
 router.post('/api/create_event', requireAuth, async (req, res) => {
     const { title, description, date, time, location, type, source_event_id } = req.body;
     const creatorId = req.session.user_id;
@@ -16,7 +31,18 @@ router.post('/api/create_event', requireAuth, async (req, res) => {
         RETURNING id;
     `;
 
+    if (!title || !date || !time) {
+        return res.status(400).json({ message: 'title, date and time are required' });
+    }
+    if (!DATE_REGEX.test(date) || !TIME_REGEX.test(time)) {
+        return res.status(400).json({ message: 'date must be YYYY-MM-DD and time must be HH:MM' });
+    }
+
     try {
+        if (await isPastDateTime(date, time)) {
+            return res.status(400).json({ message: 'Event date and time must be in the future' });
+        }
+
         // Forks must point at a real public event; anything else is dropped
         // with a 400 rather than silently creating a dangling reference.
         let sourceId = null;
@@ -184,8 +210,28 @@ router.put('/api/events/:id', requireAuth, async (req, res) => {
     if (!title || !date || !time) {
         return res.status(400).json({ message: 'title, date and time are required' });
     }
+    if (!DATE_REGEX.test(date) || !TIME_REGEX.test(time)) {
+        return res.status(400).json({ message: 'date must be YYYY-MM-DD and time must be HH:MM' });
+    }
 
     try {
+        // Rescheduling must land in the future; an unchanged (possibly past)
+        // date/time stays valid so old events can still get typo fixes.
+        const existing = await db.query(
+            `SELECT to_char(event_date, 'YYYY-MM-DD') AS date,
+                    to_char(event_time, 'HH24:MI') AS time
+             FROM events WHERE id = $1`,
+            [eventId]
+        );
+        if (existing.rows.length === 0) {
+            return res.status(404).json({ message: 'Event not found' });
+        }
+        const dateTimeChanged =
+            existing.rows[0].date !== date || existing.rows[0].time !== time.slice(0, 5);
+        if (dateTimeChanged && await isPastDateTime(date, time)) {
+            return res.status(400).json({ message: 'Event date and time must be in the future' });
+        }
+
         const result = await db.query(
             `UPDATE events
              SET title = $1, description = $2, event_date = $3, event_time = $4, location = $5

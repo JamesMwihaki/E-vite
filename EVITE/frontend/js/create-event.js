@@ -25,12 +25,51 @@ let sourceEventId = null;
     if (logoutBtn) logoutBtn.addEventListener('click', logout);
 
     loadFriends();
+    setupDateTimeGuards();
 
     const fromParam = Number(new URLSearchParams(window.location.search).get('from'));
     if (Number.isInteger(fromParam) && fromParam > 0) {
         prefillFromSource(fromParam);
     }
 })();
+
+/* Events can only be scheduled from this moment forward: the date picker
+   won't offer past days, the time picker's minimum tracks "now" while
+   today is selected, and the form defaults to today at the next full hour. */
+
+function localISODate(d) {
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+function setupDateTimeGuards() {
+    const dateInput = document.getElementById('event_date');
+    const timeInput = document.getElementById('eventTime');
+
+    const today = localISODate(new Date());
+    dateInput.min = today;
+
+    if (!dateInput.value) {
+        const nextHour = new Date();
+        nextHour.setHours(nextHour.getHours() + 1, 0, 0, 0);
+        dateInput.value = localISODate(nextHour); // rolls to tomorrow at 23:xx
+        timeInput.value = `${String(nextHour.getHours()).padStart(2, '0')}:00`;
+    }
+
+    const syncTimeMin = () => {
+        const now = new Date();
+        timeInput.min = dateInput.value === localISODate(now)
+            ? `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`
+            : '';
+    };
+    syncTimeMin();
+    dateInput.addEventListener('input', syncTimeMin);
+}
+
+function showFormError(text) {
+    const message = document.getElementById('create_message');
+    message.textContent = text;
+    message.className = text ? 'message error' : 'message';
+}
 
 async function prefillFromSource(fromId) {
     try {
@@ -226,8 +265,14 @@ async function handleCreateEvent() {
     const emails = readGuestEmails();
     const friend_ids = readSelectedFriendIds();
 
-    if (!eventData.title || !eventData.date || !eventData.time) {
-        alert('Title, date, and time are required.');
+    showFormError('');
+    if (!eventData.title.trim() || !eventData.date || !eventData.time) {
+        showFormError('Title, date, and time are required.');
+        return;
+    }
+    const when = new Date(`${eventData.date}T${eventData.time}`);
+    if (Number.isNaN(when.getTime()) || when < new Date()) {
+        showFormError('Pick a date and time from this moment forward.');
         return;
     }
 
@@ -267,7 +312,7 @@ async function handleCreateEvent() {
         window.location.href = 'landing-page.html';
     } catch (error) {
         console.error('Create event failed:', error);
-        alert(`Could not create event: ${error.message}`);
+        showFormError(`Could not create event: ${error.message}`);
     }
 }
 
