@@ -12,6 +12,11 @@ const selectedFriends = new Map();
 // All friends, in render order. Each entry: { friend, rowEl, searchHay }
 const friendEntries = [];
 
+// When arriving via "create exclusive e-vite from this" on a public event,
+// ?from=<id> pre-fills the form. Only set once the source is fetched and
+// confirmed, so a bogus param can't end up on the created event.
+let sourceEventId = null;
+
 (async function init() {
     const user = await checkAuth();
     if (!user) return;
@@ -20,7 +25,35 @@ const friendEntries = [];
     if (logoutBtn) logoutBtn.addEventListener('click', logout);
 
     loadFriends();
+
+    const fromParam = Number(new URLSearchParams(window.location.search).get('from'));
+    if (Number.isInteger(fromParam) && fromParam > 0) {
+        prefillFromSource(fromParam);
+    }
 })();
+
+async function prefillFromSource(fromId) {
+    try {
+        const res = await fetch(`/api/events/${fromId}`, { credentials: 'include' });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const { event } = await res.json();
+        if (event.event_type !== 'public') return; // only public events can be forked
+
+        document.getElementById('event_name').value = event.title || '';
+        document.getElementById('eventDescription').value = event.description || '';
+        document.getElementById('event_date').value = (event.event_date || '').slice(0, 10);
+        document.getElementById('eventTime').value = (event.event_time || '').slice(0, 5);
+        document.getElementById('event_location').value = event.location || '';
+        document.getElementById('private').checked = true;
+
+        sourceEventId = event.id;
+        const note = document.getElementById('prefill-note');
+        note.textContent = `Creating an exclusive e-vite based on "${event.title}" — tweak anything you like, then invite your tree.`;
+        note.classList.remove('hidden');
+    } catch (error) {
+        console.error('Could not prefill from source event:', error);
+    }
+}
 
 document.getElementById('create_event').addEventListener('click', handleCreateEvent);
 
@@ -161,6 +194,7 @@ function readEventData() {
         time: document.getElementById('eventTime').value,
         location: document.getElementById('event_location').value,
         type: checkedType ? checkedType.value : 'public',
+        source_event_id: sourceEventId,
     };
 }
 

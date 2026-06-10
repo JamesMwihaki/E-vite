@@ -6,18 +6,32 @@ const { requireAuth } = require('../middleware/auth');
 const router = express.Router();
 
 router.post('/api/create_event', requireAuth, async (req, res) => {
-    const { title, description, date, time, location, type } = req.body;
+    const { title, description, date, time, location, type, source_event_id } = req.body;
     const creatorId = req.session.user_id;
     logger.info(`POST /api/create_event by user=${creatorId}`);
 
     const queryText = `
-        INSERT INTO events (title, description, event_date, event_time, location, event_type, creator_id)
-        VALUES ($1, $2, $3, $4, $5, $6, $7)
+        INSERT INTO events (title, description, event_date, event_time, location, event_type, creator_id, source_event_id)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
         RETURNING id;
     `;
-    const values = [title, description, date, time, location, type, creatorId];
 
     try {
+        // Forks must point at a real public event; anything else is dropped
+        // with a 400 rather than silently creating a dangling reference.
+        let sourceId = null;
+        if (source_event_id != null) {
+            sourceId = Number(source_event_id);
+            if (!Number.isInteger(sourceId)) {
+                return res.status(400).json({ message: 'source_event_id must be an integer' });
+            }
+            const source = await db.query('SELECT event_type FROM events WHERE id = $1', [sourceId]);
+            if (source.rows.length === 0 || source.rows[0].event_type !== 'public') {
+                return res.status(400).json({ message: 'source_event_id must reference an existing public event' });
+            }
+        }
+
+        const values = [title, description, date, time, location, type, creatorId, sourceId];
         const result = await db.query(queryText, values);
         res.status(201).json({
             message: 'Event saved',
@@ -78,11 +92,14 @@ router.get('/api/events/:id', requireAuth, async (req, res) => {
         const eventResult = await db.query(
             `SELECT e.id, e.title, e.description, e.event_date, e.event_time,
                     e.location, e.event_type, e.creator_id, e.created_at,
+                    e.source_event_id,
+                    s.title AS source_title,
                     u.username AS creator_username,
                     u.first_name AS creator_first_name,
                     u.last_name AS creator_last_name
              FROM events e
              JOIN users u ON u.id = e.creator_id
+             LEFT JOIN events s ON s.id = e.source_event_id
              WHERE e.id = $1`,
             [eventId]
         );

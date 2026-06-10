@@ -116,6 +116,13 @@
             font-size: 0.9em;
             margin-top: 4px;
         }
+        .based-on {
+            color: #555;
+            font-size: 0.85em;
+            margin-top: 4px;
+            font-style: italic;
+        }
+        .based-on a { color: inherit; }
         .countdown {
             margin-top: 4px;
             font-size: 0.9em;
@@ -223,6 +230,8 @@
             font-size: inherit;
             color: inherit;
             cursor: pointer;
+            text-decoration: none;
+            text-align: center;
         }
         .ascii-button:hover { background: #eee; }
         .ascii-button.danger { color: #a00; border-color: #a00; }
@@ -311,6 +320,7 @@
                 <span class="type-badge" id="type-badge"></span>
             </div>
             <div class="hosted-by" id="hosted-by"></div>
+            <div class="based-on hidden" id="based-on"></div>
             <div class="countdown" id="countdown"></div>
             <div class="detail-grid">
                 <div class="detail-row"><span class="key">When:</span><span class="val" id="event-when"></span></div>
@@ -326,6 +336,19 @@
                 <button type="button" class="rsvp-btn" id="rsvp-no">[ NOT GOING ]</button>
             </div>
             <div class="rsvp-status" id="rsvp-status"></div>
+        </div>
+
+        <div class="section hidden" id="fork-section">
+            <div class="button-row">
+                <a class="ascii-frame ascii-button" id="fork-btn">
+                    <span class="corner tl">+</span>
+                    <span class="corner tr">+</span>
+                    <span class="corner bl">+</span>
+                    <span class="corner br">+</span>
+                    [ CREATE EXCLUSIVE E-VITE FROM THIS ]
+                </a>
+            </div>
+            <div class="message" id="fork-hint">Copy this event's details into your own private e-vite and invite your tree.</div>
         </div>
 
         <div class="section hidden" id="attendees-section">

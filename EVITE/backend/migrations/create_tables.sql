@@ -74,3 +74,8 @@ CREATE TABLE IF NOT EXISTS friendships (
 
 -- Direct in-platform invitations (by user id) live alongside the email-based ones.
 ALTER TABLE invitations ADD COLUMN IF NOT EXISTS invitee_user_id INTEGER REFERENCES users(id) ON DELETE CASCADE;
+
+-- Exclusive events forked from a public event keep a pointer to their source,
+-- so the detail page can show "Based on: <public event>". If the source is
+-- deleted the fork lives on, just without the link.
+ALTER TABLE events ADD COLUMN IF NOT EXISTS source_event_id INTEGER REFERENCES events(id) ON DELETE SET NULL;

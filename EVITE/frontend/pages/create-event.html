@@ -88,6 +88,17 @@
             margin-bottom: 6px;
         }
 
+        .hidden { display: none !important; }
+        .prefill-note {
+            text-align: center;
+            font-size: 0.85em;
+            font-style: italic;
+            color: #555;
+            border: 1px dashed #999;
+            padding: 6px 10px;
+            margin-bottom: 14px;
+        }
+
         .input-frame {
             padding: 6px 10px;
             margin-bottom: 14px;
@@ -246,6 +257,7 @@
 
         <main class="content">
         <div class="section">
+            <div class="prefill-note hidden" id="prefill-note"></div>
             <label class="field-label" for="event_name">Event Title</label>
             <div class="ascii-frame input-frame">
                 <span class="corner tl">+</span>

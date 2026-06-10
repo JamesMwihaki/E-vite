@@ -71,6 +71,29 @@ function render(data) {
     document.getElementById('event-desc').textContent = event.description || 'No description yet.';
     renderCountdown(event.event_date, event.event_time);
 
+    // Forked exclusive events link back to the public event they came from.
+    const basedOn = document.getElementById('based-on');
+    if (event.source_event_id && event.source_title) {
+        basedOn.classList.remove('hidden');
+        basedOn.innerHTML = '';
+        basedOn.append('Based on: ');
+        const link = document.createElement('a');
+        link.href = `event.html?id=${event.source_event_id}`;
+        link.textContent = event.source_title;
+        basedOn.appendChild(link);
+    } else {
+        basedOn.classList.add('hidden');
+    }
+
+    // Any viewer can fork a public event into their own exclusive e-vite.
+    const forkSection = document.getElementById('fork-section');
+    if (event.event_type === 'public') {
+        forkSection.classList.remove('hidden');
+        document.getElementById('fork-btn').href = `create-event.html?from=${event.id}`;
+    } else {
+        forkSection.classList.add('hidden');
+    }
+
     renderAttendees(attendees);
 
     // Guests RSVP; the host doesn't RSVP to their own event.
