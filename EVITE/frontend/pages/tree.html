@@ -11,7 +11,8 @@
             font-family: 'Courier New', monospace;
             background: #f0f0f0;
             color: #111;
-            min-height: 100vh;
+            height: 100vh;
+            height: 100dvh;
             display: flex;
             justify-content: center;
             padding: 20px;
@@ -49,6 +50,19 @@
 
         .section { padding: 14px 20px; }
         .section + .section { border-top: 1px dashed #111; }
+
+        /* Middle content scrolls; topbar + nav-bar stay pinned to the frame. */
+        .content {
+            flex: 1;
+            min-height: 0;
+            overflow-y: auto;
+            border-top: 1px dashed #111;
+            border-bottom: 1px dashed #111;
+        }
+        .content::-webkit-scrollbar { width: 6px; }
+        .content::-webkit-scrollbar-track { background: transparent; }
+        .content::-webkit-scrollbar-thumb { background: #111; }
+        .section.topbar, .section.nav-bar { flex-shrink: 0; }
 
         .topbar {
             display: flex;
@@ -351,6 +365,7 @@
             <span class="clickable" id="logout-btn">[LOGOUT]</span>
         </div>
 
+        <main class="content">
         <div class="section">
             <div class="section-label">Pending Requests</div>
             <div id="requests-list" class="person-list"></div>
@@ -385,6 +400,7 @@
             <div class="leaf-overflow" id="leaf-overflow"></div>
             <div class="leaf-info" id="leaf-info"></div>
         </div>
+        </main>
 
         <div class="section nav-bar">
             <a href="landing-page.html" class="nav-item">[HOME]</a>
