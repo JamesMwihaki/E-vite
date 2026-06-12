@@ -33,6 +33,9 @@ async function handleLogin() {
             return;
         }
 
+        // Seed the auth cache (same key auth.js reads) so the landing page
+        // renders without waiting on a /api/me round trip.
+        try { sessionStorage.setItem('evite_user', JSON.stringify(data.user)); } catch {}
         window.location.href = 'landing-page.html';
     } catch (error) {
         console.error('Login request failed:', error);

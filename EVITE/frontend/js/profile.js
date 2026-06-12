@@ -247,6 +247,7 @@ async function saveProfile() {
             return;
         }
         populateFromUser(data.user);
+        cacheUser(data.user); // keep the cached greeting/name in sync
         setMsg(profileMsgEl, data.scouting
             ? 'Saved. ⚡ The scout is searching for events near you — check the events page in a few minutes.'
             : 'Saved.', 'success');
