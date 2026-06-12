@@ -108,6 +108,43 @@
         .section-label::before { content: '[ '; }
         .section-label::after  { content: ' ]'; }
 
+        /* Date filter bar */
+        .filter-row {
+            display: flex;
+            justify-content: center;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+        .filter-btn {
+            background: transparent;
+            border: none;
+            color: #111;
+            font-family: inherit;
+            font-size: inherit;
+            padding: 2px 4px;
+            cursor: pointer;
+        }
+        .filter-btn:hover { background: #eee; }
+        .filter-btn.active { background: #111; color: #fff; }
+        .filter-dates {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 8px;
+            margin-top: 10px;
+            flex-wrap: wrap;
+        }
+        .filter-dates input[type="date"] {
+            font-family: inherit;
+            font-size: 0.9em;
+            border: 1px dashed #111;
+            background: #fff;
+            color: #111;
+            padding: 2px 6px;
+        }
+
+        .hidden { display: none; }
+
         .event-list {
             display: flex;
             flex-direction: column;
@@ -119,6 +156,9 @@
             overflow-y: auto;
             padding-right: 6px;
         }
+        /* When the other section has nothing to show, let this one take the
+           whole page and scroll with it. */
+        .event-list.scrollable.expanded { max-height: none; }
         .event-list.scrollable::-webkit-scrollbar { width: 6px; }
         .event-list.scrollable::-webkit-scrollbar-track { background: transparent; }
         .event-list.scrollable::-webkit-scrollbar-thumb { background: #111; }
@@ -240,12 +280,27 @@
             </a>
         </div>
 
-        <div class="section">
+        <div class="section" id="filter-section">
+            <div class="filter-row">
+                <button type="button" class="filter-btn active" data-range="all">[ ALL ]</button>
+                <button type="button" class="filter-btn" data-range="today">[ TODAY ]</button>
+                <button type="button" class="filter-btn" data-range="week">[ 7 DAYS ]</button>
+                <button type="button" class="filter-btn" data-range="month">[ 30 DAYS ]</button>
+            </div>
+            <div class="filter-dates">
+                <label for="filter-from">From</label>
+                <input type="date" id="filter-from">
+                <label for="filter-to">To</label>
+                <input type="date" id="filter-to">
+            </div>
+        </div>
+
+        <div class="section" id="exclusive-section">
             <div class="section-label">Exclusive E-vites</div>
             <div id="exclusive-list" class="event-list scrollable"></div>
         </div>
 
-        <div class="section">
+        <div class="section" id="public-section">
             <div class="section-label">Public E-vites</div>
             <div id="public-list" class="event-list scrollable"></div>
         </div>

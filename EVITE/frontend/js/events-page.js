@@ -2,6 +2,11 @@ const EVENTS_ENDPOINT = "/api/create_event";
 const RSVP_ENDPOINT = "/api/rsvp";
 const RSVPS_ENDPOINT = "/api/rsvps";
 
+// Fetched once; re-rendered whenever the date filter changes.
+let allEvents = [];
+let rsvpMap = new Map();
+const dateFilter = { from: null, to: null }; // YYYY-MM-DD strings
+
 (async function init() {
     const user = await checkAuth();
     if (!user) return;
@@ -12,13 +17,11 @@ const RSVPS_ENDPOINT = "/api/rsvps";
     const logoutBtn = document.getElementById('logout-btn');
     if (logoutBtn) logoutBtn.addEventListener('click', logout);
 
+    wireDateFilter();
     loadEvents();
 })();
 
 async function loadEvents() {
-    const exclusiveList = document.getElementById('exclusive-list');
-    const publicList = document.getElementById('public-list');
-
     try {
         const [eventsRes, rsvpsRes] = await Promise.all([
             fetch(EVENTS_ENDPOINT, { credentials: 'include' }),
@@ -31,20 +34,112 @@ async function loadEvents() {
 
         const events = await eventsRes.json();
         const rsvps = rsvpsRes.ok ? await rsvpsRes.json() : [];
-        const rsvpMap = new Map(rsvps.map(r => [r.event_id, r.status]));
+        rsvpMap = new Map(rsvps.map(r => [r.event_id, r.status]));
 
         // Passed events are hidden from all lists (still reachable by link).
-        const upcoming = events.filter(e => !isPastEvent(e));
-        const exclusive = upcoming.filter(e => e.event_type === 'private');
-        const publicEvents = upcoming.filter(e => e.event_type === 'public');
-
-        renderList(exclusiveList, exclusive, rsvpMap, 'No upcoming exclusive e-vites');
-        renderList(publicList, publicEvents, rsvpMap, 'No upcoming public e-vites');
+        allEvents = events.filter(e => !isPastEvent(e));
+        renderLists();
     } catch (error) {
         console.error('Failed to load events:', error);
-        renderError(exclusiveList, 'Error loading events');
-        renderError(publicList, '');
+        renderError(document.getElementById('exclusive-list'), 'Error loading events');
+        renderError(document.getElementById('public-list'), '');
     }
+}
+
+function renderLists() {
+    const exclusiveSection = document.getElementById('exclusive-section');
+    const publicSection = document.getElementById('public-section');
+    const exclusiveList = document.getElementById('exclusive-list');
+    const publicList = document.getElementById('public-list');
+
+    // Closest date first; the date filter applies to both lists.
+    const visible = allEvents
+        .filter(inDateFilter)
+        .sort((a, b) => (eventDateValue(a) ?? 0) - (eventDateValue(b) ?? 0));
+    const exclusive = visible.filter(e => e.event_type === 'private');
+    const publicEvents = visible.filter(e => e.event_type === 'public');
+
+    // When one side has nothing to show, give the other the whole page.
+    // Optional chaining: my-evites.html shares this script but only has the
+    // exclusive list, no section wrappers.
+    const onlyPublic = exclusive.length === 0 && publicEvents.length > 0;
+    const onlyExclusive = publicEvents.length === 0 && exclusive.length > 0;
+    exclusiveSection?.classList.toggle('hidden', onlyPublic);
+    publicSection?.classList.toggle('hidden', onlyExclusive);
+    exclusiveList?.classList.toggle('expanded', onlyExclusive);
+    publicList?.classList.toggle('expanded', onlyPublic);
+
+    const filtered = dateFilter.from || dateFilter.to;
+    renderList(exclusiveList, exclusive, rsvpMap,
+        filtered ? 'No exclusive e-vites in this date range' : 'No upcoming exclusive e-vites');
+    renderList(publicList, publicEvents, rsvpMap,
+        filtered ? 'No public e-vites in this date range' : 'No upcoming public e-vites');
+}
+
+/* ---- date filter ---- */
+
+function wireDateFilter() {
+    const fromInput = document.getElementById('filter-from');
+    const toInput = document.getElementById('filter-to');
+    if (!fromInput || !toInput) return; // page without the filter bar
+
+    document.querySelectorAll('.filter-btn').forEach((btn) => {
+        btn.addEventListener('click', () => {
+            const today = localISODate(new Date());
+            const ranges = {
+                all: [null, null],
+                today: [today, today],
+                week: [today, localISODate(addDays(new Date(), 7))],
+                month: [today, localISODate(addDays(new Date(), 30))],
+            };
+            const [from, to] = ranges[btn.dataset.range] || [null, null];
+            dateFilter.from = from;
+            dateFilter.to = to;
+            fromInput.value = from || '';
+            toInput.value = to || '';
+            setActiveFilterBtn(btn);
+            renderLists();
+        });
+    });
+
+    const onDateInput = () => {
+        dateFilter.from = fromInput.value || null;
+        dateFilter.to = toInput.value || null;
+        setActiveFilterBtn(null); // custom range — no preset highlighted
+        renderLists();
+    };
+    fromInput.addEventListener('change', onDateInput);
+    toInput.addEventListener('change', onDateInput);
+}
+
+function setActiveFilterBtn(activeBtn) {
+    document.querySelectorAll('.filter-btn').forEach((btn) =>
+        btn.classList.toggle('active', btn === activeBtn));
+}
+
+function inDateFilter(event) {
+    const day = String(event.event_date || '').slice(0, 10);
+    if (!day) return true;
+    if (dateFilter.from && day < dateFilter.from) return false;
+    if (dateFilter.to && day > dateFilter.to) return false;
+    return true;
+}
+
+function localISODate(d) {
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+function addDays(d, days) {
+    d.setDate(d.getDate() + days);
+    return d;
+}
+
+function eventDateValue(event) {
+    if (!event.event_date) return null;
+    const datePart = String(event.event_date).slice(0, 10);
+    const timePart = (event.event_time || '00:00:00').slice(0, 8);
+    const dt = new Date(`${datePart}T${timePart}`);
+    return Number.isNaN(dt.getTime()) ? null : dt.getTime();
 }
 
 function renderList(container, events, rsvpMap, emptyText) {
