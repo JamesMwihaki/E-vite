@@ -81,14 +81,19 @@ router.get('/api/create_event', requireAuth, async (req, res) => {
     const userId = req.session.user_id;
 
     // Visibility:
-    //   - public events are visible to everyone
+    //   - public events are visible to everyone, except agent-discovered ones,
+    //     which only show to users whose profile location matches the city
+    //     they were discovered for (no location set = no discovered events)
     //   - private events are visible only to the creator, to a directly-invited
     //     user (invitee_user_id), or to a user whose email matches an invitation
     const queryText = `
         SELECT e.id, e.title, e.description, e.event_date, e.event_time,
-               e.location, e.event_type, e.creator_id
+               e.location, e.event_type, e.creator_id, e.discovered, e.source_url
         FROM events e
-        WHERE e.event_type = 'public'
+        WHERE (e.event_type = 'public'
+               AND (e.discovered = FALSE
+                    OR LOWER(COALESCE(e.city, '')) =
+                       LOWER(TRIM(COALESCE((SELECT location FROM users WHERE id = $1), '')))))
            OR e.creator_id = $1
            OR EXISTS (
                SELECT 1
@@ -126,7 +131,7 @@ router.get('/api/events/:id', requireAuth, async (req, res) => {
         const eventResult = await db.query(
             `SELECT e.id, e.title, e.description, e.event_date, e.event_time,
                     e.location, e.event_type, e.creator_id, e.created_at,
-                    e.source_event_id,
+                    e.source_event_id, e.discovered, e.source_url,
                     s.title AS source_title,
                     u.username AS creator_username,
                     u.first_name AS creator_first_name,

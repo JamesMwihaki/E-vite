@@ -79,3 +79,50 @@ ALTER TABLE invitations ADD COLUMN IF NOT EXISTS invitee_user_id INTEGER REFEREN
 -- so the detail page can show "Based on: <public event>". If the source is
 -- deleted the fork lives on, just without the link.
 ALTER TABLE events ADD COLUMN IF NOT EXISTS source_event_id INTEGER REFERENCES events(id) ON DELETE SET NULL;
+
+-- Event-scout agent: users opt in by setting a city on their profile. The
+-- timezone is captured silently from the browser so the agent can run at
+-- 5 AM in each user's local time.
+ALTER TABLE users ADD COLUMN IF NOT EXISTS location TEXT;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS timezone TEXT;
+
+-- Agent-discovered events live in the regular events table (public, RSVP-able,
+-- forkable) with extra provenance columns. external_key dedupes re-discoveries
+-- of the same event (normalized title|date|venue); city scopes events to the
+-- user cluster they were found for.
+ALTER TABLE events ADD COLUMN IF NOT EXISTS discovered BOOLEAN NOT NULL DEFAULT FALSE;
+ALTER TABLE events ADD COLUMN IF NOT EXISTS source_url TEXT;
+ALTER TABLE events ADD COLUMN IF NOT EXISTS external_key TEXT;
+ALTER TABLE events ADD COLUMN IF NOT EXISTS city TEXT;
+CREATE UNIQUE INDEX IF NOT EXISTS events_external_key_uniq ON events(external_key);
+
+-- The agent's knowledge base: places it has learned host events ("this bar is
+-- known for live music"). Consulted on every run and grown over time.
+CREATE TABLE IF NOT EXISTS agent_venues (
+    id SERIAL PRIMARY KEY,
+    city TEXT NOT NULL,
+    name TEXT NOT NULL,
+    notes TEXT,
+    last_seen TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(city, name)
+);
+
+-- One row per city per local date keeps the hourly cron idempotent: a cluster
+-- runs once after 5 AM local time and is skipped for the rest of that day.
+CREATE TABLE IF NOT EXISTS agent_runs (
+    id SERIAL PRIMARY KEY,
+    city TEXT NOT NULL,
+    run_date DATE NOT NULL,
+    status VARCHAR(20) NOT NULL CHECK (status IN ('ok', 'error')),
+    events_found INTEGER DEFAULT 0,
+    detail TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(city, run_date)
+);
+
+-- System user that owns agent-discovered events. password_hash stays NULL so
+-- nobody can log in as it.
+INSERT INTO users (username, email, first_name, last_name)
+VALUES ('evite_scout', 'scout@evite.internal', 'E-vite', 'Scout')
+ON CONFLICT DO NOTHING;

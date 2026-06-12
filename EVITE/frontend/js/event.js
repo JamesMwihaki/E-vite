@@ -66,8 +66,24 @@ function render(data) {
 
     const hostName = [event.creator_first_name, event.creator_last_name].filter(Boolean).join(' ')
         || event.creator_username;
-    document.getElementById('hosted-by').textContent =
-        is_creator ? 'Hosted by you' : `Hosted by ${hostName} (@${event.creator_username})`;
+    const hostedBy = document.getElementById('hosted-by');
+    if (event.discovered) {
+        // Agent-found events have no human host; show provenance instead.
+        hostedBy.innerHTML = '';
+        hostedBy.append('⚡ Found nearby by the E-vite scout');
+        if (event.source_url) {
+            hostedBy.append(' · ');
+            const src = document.createElement('a');
+            src.href = event.source_url;
+            src.target = '_blank';
+            src.rel = 'noopener';
+            src.textContent = 'source';
+            hostedBy.appendChild(src);
+        }
+    } else {
+        hostedBy.textContent =
+            is_creator ? 'Hosted by you' : `Hosted by ${hostName} (@${event.creator_username})`;
+    }
 
     document.getElementById('event-when').textContent = formatWhen(event.event_date, event.event_time);
     document.getElementById('event-where').textContent = event.location || 'TBD';

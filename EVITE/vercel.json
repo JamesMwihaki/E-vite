@@ -15,7 +15,10 @@
   ],
   "functions": {
     "api/index.js": {
-      "maxDuration": 15
+      "maxDuration": 300
     }
-  }
+  },
+  "crons": [
+    { "path": "/api/agent/run", "schedule": "0 13 * * *" }
+  ]
 }

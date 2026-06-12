@@ -11,6 +11,7 @@ const joinedEl = document.getElementById('joined');
 const firstNameInput = document.getElementById('first_name');
 const lastNameInput = document.getElementById('last_name');
 const emailInput = document.getElementById('email');
+const locationInput = document.getElementById('location');
 
 const currentPwInput = document.getElementById('current_password');
 const newPwInput = document.getElementById('new_password');
@@ -44,6 +45,7 @@ function populateFromUser(user) {
     firstNameInput.value = user.first_name || '';
     lastNameInput.value = user.last_name || '';
     emailInput.value = user.email || '';
+    locationInput.value = user.location || '';
 }
 
 function formatJoinedDate(iso) {
@@ -70,6 +72,10 @@ async function saveProfile() {
         first_name: firstNameInput.value.trim() || null,
         last_name: lastNameInput.value.trim() || null,
         email: emailInput.value.trim(),
+        location: locationInput.value.trim() || null,
+        // Sent silently so the event scout can run at 5 AM in the user's
+        // local time without asking them to pick a timezone.
+        timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || null,
     };
     if (!payload.email) {
         setMsg(profileMsgEl, 'Email is required.', 'error');

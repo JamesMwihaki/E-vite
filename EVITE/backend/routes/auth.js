@@ -90,7 +90,7 @@ router.get('/api/me', async (req, res) => {
     }
     try {
         const result = await db.query(
-            'SELECT id, username, email, first_name, last_name, created_at FROM users WHERE id = $1',
+            'SELECT id, username, email, first_name, last_name, location, created_at FROM users WHERE id = $1',
             [req.session.user_id]
         );
         if (result.rows.length === 0) {
@@ -140,16 +140,21 @@ router.put('/api/me', async (req, res) => {
     if (!req.session || !req.session.user_id) {
         return res.status(401).json({ message: 'Not authenticated' });
     }
-    const { first_name, last_name, email } = req.body;
+    const { first_name, last_name, email, location, timezone } = req.body;
     if (!email || !EMAIL_REGEX.test(email)) {
         return res.status(400).json({ message: 'Valid email is required' });
     }
     try {
+        // location opts the user into nearby-event discovery; timezone comes
+        // from the browser so the scout can run at 5 AM local time.
         const result = await db.query(
-            `UPDATE users SET first_name = $1, last_name = $2, email = $3
-             WHERE id = $4
-             RETURNING id, username, email, first_name, last_name, created_at`,
-            [first_name || null, last_name || null, email, req.session.user_id]
+            `UPDATE users SET first_name = $1, last_name = $2, email = $3,
+                              location = $4, timezone = COALESCE($5, timezone)
+             WHERE id = $6
+             RETURNING id, username, email, first_name, last_name, location, created_at`,
+            [first_name || null, last_name || null, email,
+             (location || '').trim() || null, (timezone || '').trim() || null,
+             req.session.user_id]
         );
         if (result.rows.length === 0) {
             return res.status(404).json({ message: 'User not found' });
