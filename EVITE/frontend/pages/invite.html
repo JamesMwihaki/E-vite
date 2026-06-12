@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>You're invited · E-vite</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            font-family: 'Courier New', monospace;
+            background: #f0f0f0;
+            color: #111;
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: flex-start;
+            padding: 20px;
+        }
+
+        .ascii-frame {
+            position: relative;
+            border: 1px dashed #111;
+            background: #fff;
+            font-family: 'Courier New', monospace;
+        }
+        .ascii-frame > .corner {
+            position: absolute;
+            line-height: 1;
+            font-weight: bold;
+            -webkit-user-select: none;
+            user-select: none;
+            pointer-events: none;
+        }
+        .ascii-frame > .corner.tl { top: -0.55em; left: -0.3ch;  }
+        .ascii-frame > .corner.tr { top: -0.55em; right: -0.3ch; }
+        .ascii-frame > .corner.bl { bottom: -0.55em; left: -0.3ch;  }
+        .ascii-frame > .corner.br { bottom: -0.55em; right: -0.3ch; }
+        .terminal .ascii-frame > .corner { background: #fff; padding: 0 2px; }
+        .terminal.ascii-frame > .corner  { background: #f0f0f0; padding: 0 2px; }
+
+        .terminal {
+            box-shadow: 4px 4px 0 rgba(0, 0, 0, 0.15);
+            width: 100%;
+            max-width: 560px;
+            margin-top: 5vh;
+        }
+
+        .section { padding: 16px 22px; }
+        .section + .section { border-top: 1px dashed #111; }
+
+        .topbar { text-align: center; font-weight: bold; }
+
+        .invited-by { text-align: center; color: #555; }
+
+        .event-title {
+            text-align: center;
+            font-weight: bold;
+            font-size: 1.2em;
+            margin-bottom: 10px;
+        }
+        .detail { margin: 4px 0; }
+        .detail .label { color: #777; }
+
+        .rsvp-buttons {
+            display: flex;
+            gap: 12px;
+            justify-content: center;
+            flex-wrap: wrap;
+            margin-top: 6px;
+        }
+        .rsvp-btn {
+            background: transparent;
+            border: 1px dashed #111;
+            color: #111;
+            font-family: inherit;
+            font-size: inherit;
+            padding: 8px 22px;
+            cursor: pointer;
+        }
+        .rsvp-btn:hover { background: #eee; }
+        .rsvp-btn.selected { background: #111; color: #fff; }
+
+        .message {
+            text-align: center;
+            margin-top: 10px;
+            min-height: 1.2em;
+        }
+        .message.error { color: #a00; }
+        .message.success { color: #1d6b2e; }
+
+        .signup-nudge {
+            text-align: center;
+            font-size: 0.9em;
+            color: #555;
+        }
+        .signup-nudge a { color: #111; }
+
+        .hidden { display: none; }
+        .state { text-align: center; color: #777; font-style: italic; }
+    </style>
+</head>
+<body>
+    <div class="terminal ascii-frame">
+        <span class="corner tl">+</span>
+        <span class="corner tr">+</span>
+        <span class="corner bl">+</span>
+        <span class="corner br">+</span>
+
+        <div class="section topbar">E-VITE</div>
+
+        <div class="section state" id="loading-state">Loading your invitation…</div>
+        <div class="section state hidden" id="error-state"></div>
+
+        <div class="section hidden" id="invite-section">
+            <div class="invited-by" id="invited-by"></div>
+        </div>
+
+        <div class="section hidden" id="event-section">
+            <div class="event-title" id="event-title"></div>
+            <div class="detail"><span class="label">When:</span> <span id="event-when"></span></div>
+            <div class="detail"><span class="label">Where:</span> <span id="event-where"></span></div>
+            <div class="detail" id="event-desc-row"><span class="label">Details:</span> <span id="event-desc"></span></div>
+        </div>
+
+        <div class="section hidden" id="rsvp-section">
+            <div class="rsvp-buttons">
+                <button type="button" class="rsvp-btn" id="accept-btn">[ I'M GOING ]</button>
+                <button type="button" class="rsvp-btn" id="decline-btn">[ CAN'T MAKE IT ]</button>
+            </div>
+            <div class="message" id="rsvp-message"></div>
+        </div>
+
+        <div class="section signup-nudge">
+            Want to host your own events? <a href="signup.html">Create an E-vite account</a>
+        </div>
+    </div>
+
+    <script src="../js/invite.js"></script>
+</body>
+</html>
