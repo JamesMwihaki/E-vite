@@ -215,6 +215,61 @@
             padding: 8px 4px;
         }
 
+        /* ---- Invited list management + group chat ---- */
+        .person-remove {
+            flex-shrink: 0;
+            background: none;
+            border: 1px dashed #a00;
+            color: #a00;
+            font-family: inherit;
+            font-size: 0.8em;
+            padding: 1px 7px;
+            cursor: pointer;
+        }
+        .person-remove:hover { background: #fee; }
+
+        .chat-hint {
+            text-align: center;
+            color: #777;
+            font-size: 0.85em;
+            margin-bottom: 10px;
+        }
+        .chat-messages {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            max-height: 280px;
+            overflow-y: auto;
+            padding: 2px 4px 8px;
+        }
+        .chat-messages::-webkit-scrollbar { width: 6px; }
+        .chat-messages::-webkit-scrollbar-thumb { background: #111; }
+        .chat-msg { font-size: 0.95em; }
+        .chat-msg .chat-author { font-weight: bold; }
+        .chat-msg.mine .chat-author { color: #1d6b2e; }
+        .chat-msg .chat-time { color: #999; font-size: 0.8em; margin-left: 6px; }
+        .chat-msg .chat-body { white-space: pre-wrap; overflow-wrap: anywhere; }
+        .chat-msg .chat-delete {
+            background: none;
+            border: none;
+            color: #a00;
+            font-family: inherit;
+            font-size: 0.8em;
+            cursor: pointer;
+            margin-left: 6px;
+            padding: 0 4px;
+        }
+        .chat-msg .chat-delete:hover { background: #fee; }
+        .chat-empty { text-align: center; color: #777; font-style: italic; padding: 6px; }
+        .chat-compose {
+            display: flex;
+            gap: 10px;
+            align-items: stretch;
+            margin-top: 4px;
+        }
+        .chat-compose .chat-input-frame { flex: 1; margin-bottom: 0; }
+        .chat-compose .ascii-button { flex-shrink: 0; padding: 6px 12px; }
+
         /* ---- Creator controls ---- */
         .button-row {
             display: flex;
@@ -360,6 +415,50 @@
         <div class="section hidden" id="invited-section">
             <div class="section-label">Invited</div>
             <div class="person-list" id="invited-list"></div>
+        </div>
+
+        <div class="section hidden" id="add-invite-section">
+            <div class="section-label">Invite More People</div>
+            <div class="ascii-frame input-frame">
+                <span class="corner tl">+</span>
+                <span class="corner tr">+</span>
+                <span class="corner bl">+</span>
+                <span class="corner br">+</span>
+                <input type="text" id="add-invite-emails" placeholder="email@one.com, email@two.com">
+            </div>
+            <div class="button-row">
+                <button type="button" class="ascii-frame ascii-button" id="add-invite-btn">
+                    <span class="corner tl">+</span>
+                    <span class="corner tr">+</span>
+                    <span class="corner bl">+</span>
+                    <span class="corner br">+</span>
+                    [ SEND E-VITES ]
+                </button>
+            </div>
+            <div class="message" id="add-invite-message"></div>
+        </div>
+
+        <div class="section hidden" id="chat-section">
+            <div class="section-label">Group Chat</div>
+            <div class="chat-hint">Everyone invited + the host. The host can remove messages.</div>
+            <div class="chat-messages" id="chat-messages"></div>
+            <div class="chat-compose">
+                <div class="ascii-frame input-frame chat-input-frame">
+                    <span class="corner tl">+</span>
+                    <span class="corner tr">+</span>
+                    <span class="corner bl">+</span>
+                    <span class="corner br">+</span>
+                    <input type="text" id="chat-input" maxlength="2000" placeholder="Say something…">
+                </div>
+                <button type="button" class="ascii-frame ascii-button" id="chat-send-btn">
+                    <span class="corner tl">+</span>
+                    <span class="corner tr">+</span>
+                    <span class="corner bl">+</span>
+                    <span class="corner br">+</span>
+                    [ SEND ]
+                </button>
+            </div>
+            <div class="message" id="chat-message"></div>
         </div>
 
         <div class="section hidden" id="manage-section">

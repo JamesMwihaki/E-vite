@@ -139,6 +139,17 @@ CREATE TABLE IF NOT EXISTS agent_runs (
     UNIQUE(city, run_date)
 );
 
+-- Per-event group chat: members are the creator (admin) plus invitees with
+-- accounts. Messages go with the event when it's deleted.
+CREATE TABLE IF NOT EXISTS event_messages (
+    id SERIAL PRIMARY KEY,
+    event_id INTEGER NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    body TEXT NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS event_messages_event_idx ON event_messages(event_id, id);
+
 -- System user that owns agent-discovered events. password_hash stays NULL so
 -- nobody can log in as it.
 INSERT INTO users (username, email, first_name, last_name)

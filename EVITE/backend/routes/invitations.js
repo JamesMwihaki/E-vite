@@ -146,6 +146,44 @@ router.get('/api/invitations', requireAuth, async (req, res) => {
     }
 });
 
+// Uninvite someone after the fact — event creator only. Their RSVP (if they
+// have an account) goes too, so they drop out of "who's going" and lose
+// private-event visibility and chat membership immediately.
+router.delete('/api/invitations/:id', requireAuth, async (req, res) => {
+    const invitationId = Number(req.params.id);
+    const userId = req.session.user_id;
+    if (!Number.isInteger(invitationId)) {
+        return res.status(400).json({ message: 'Invalid invitation id' });
+    }
+    try {
+        const result = await db.query(
+            `DELETE FROM invitations i
+             USING events e
+             WHERE i.id = $1 AND e.id = i.event_id AND e.creator_id = $2
+             RETURNING i.event_id, i.invitee_user_id, i.invitee_email`,
+            [invitationId, userId]
+        );
+        if (result.rows.length === 0) {
+            const exists = await db.query('SELECT 1 FROM invitations WHERE id = $1', [invitationId]);
+            return exists.rows.length > 0
+                ? res.status(403).json({ message: 'Only the event creator can remove invitations' })
+                : res.status(404).json({ message: 'Invitation not found' });
+        }
+        const removed = result.rows[0];
+        await db.query(
+            `DELETE FROM rsvps
+             WHERE event_id = $1
+               AND user_id = COALESCE($2, (SELECT id FROM users WHERE email = $3))`,
+            [removed.event_id, removed.invitee_user_id, removed.invitee_email]
+        );
+        logger.info(`Invitation ${invitationId} removed by creator ${userId}`);
+        res.json({ message: 'Invitation removed' });
+    } catch (error) {
+        logger.error(`Invitation removal failed: ${error.message}`);
+        res.status(500).json({ message: 'Could not remove invitation' });
+    }
+});
+
 /* ---- public RSVP-by-token (no login required) ---- */
 
 const TOKEN_REGEX = /^[0-9a-f-]{36}$/i;

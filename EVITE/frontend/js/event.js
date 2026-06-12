@@ -126,9 +126,13 @@ function render(data) {
 
     if (is_creator) {
         document.getElementById('manage-section').classList.remove('hidden');
+        document.getElementById('add-invite-section').classList.remove('hidden');
         renderInvited(invitations);
         wireManage();
+        wireAddInvites();
     }
+
+    initChat();
 }
 
 function renderCountdown(eventDate, eventTime) {
@@ -193,8 +197,101 @@ function renderInvited(invitations) {
         const sub = inv.invitee_user_id ? `@${inv.invitee_username}` : 'by email';
         const statusClass = inv.status === 'accepted' ? 'going'
             : inv.status === 'declined' ? 'not-going' : 'pending';
-        list.appendChild(personRow(name, sub, inv.status.toUpperCase(), statusClass));
+        const row = personRow(name, sub, inv.status.toUpperCase(), statusClass);
+
+        // The creator can uninvite; two-click confirm like the delete button.
+        const removeBtn = document.createElement('button');
+        removeBtn.type = 'button';
+        removeBtn.className = 'person-remove';
+        removeBtn.textContent = '[ × ]';
+        removeBtn.title = 'Remove from event';
+        let armed = false;
+        removeBtn.addEventListener('click', async () => {
+            if (!armed) {
+                armed = true;
+                removeBtn.textContent = '[ REMOVE? ]';
+                setTimeout(() => { armed = false; removeBtn.textContent = '[ × ]'; }, 4000);
+                return;
+            }
+            removeBtn.disabled = true;
+            try {
+                const res = await fetch(`/api/invitations/${inv.id}`, {
+                    method: 'DELETE',
+                    credentials: 'include',
+                });
+                if (!res.ok) {
+                    const err = await res.json().catch(() => ({}));
+                    removeBtn.disabled = false;
+                    removeBtn.textContent = '[ × ]';
+                    alert(`Remove failed: ${err.message || res.status}`);
+                    return;
+                }
+                loadEvent(); // refresh invited + attendee lists
+            } catch (error) {
+                console.error('Remove invitation failed:', error);
+                removeBtn.disabled = false;
+            }
+        });
+        row.appendChild(removeBtn);
+        list.appendChild(row);
     }
+}
+
+/* ---- Creator: invite more people after the fact ---- */
+
+let addInvitesWired = false;
+
+function wireAddInvites() {
+    if (addInvitesWired) return;
+    addInvitesWired = true;
+
+    const input = document.getElementById('add-invite-emails');
+    const btn = document.getElementById('add-invite-btn');
+    const message = document.getElementById('add-invite-message');
+
+    const send = async () => {
+        const emails = (input.value || '').split(',').map(e => e.trim()).filter(Boolean);
+        if (emails.length === 0) {
+            message.textContent = 'Enter at least one email address.';
+            message.className = 'message error';
+            return;
+        }
+        btn.disabled = true;
+        message.textContent = 'Sending…';
+        message.className = 'message';
+        try {
+            const res = await fetch('/api/invitations', {
+                method: 'POST',
+                credentials: 'include',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ event_id: eventId, emails }),
+            });
+            const data = await res.json().catch(() => ({}));
+            btn.disabled = false;
+            if (!res.ok) {
+                message.textContent = data.message || `Failed (${res.status})`;
+                message.className = 'message error';
+                return;
+            }
+            const sent = data.created.length;
+            let text = `✓ ${sent} e-vite${sent === 1 ? '' : 's'} sent`;
+            if (data.skipped.length) {
+                text += ` · skipped ${data.skipped.map(s => `${s.email || s.friend_id} (${s.reason})`).join(', ')}`;
+            }
+            message.textContent = text;
+            message.className = 'message success';
+            input.value = '';
+            loadEvent();
+        } catch (error) {
+            console.error('Add invites failed:', error);
+            btn.disabled = false;
+            message.textContent = 'Could not send invitations.';
+            message.className = 'message error';
+        }
+    };
+
+    btn.addEventListener('click', send);
+    input.addEventListener('keydown', (e) => { if (e.key === 'Enter') send(); });
 }
 
 function personRow(name, sub, statusText, statusClass) {
@@ -399,6 +496,166 @@ async function deleteEvent(message) {
         message.textContent = 'Delete failed. Is the backend running?';
         message.className = 'message error';
     }
+}
+
+/* ---- Group chat ---- */
+// Members: host + invitees. Visibility is decided by the server — we probe
+// once and show the section on 200. Polls every 5s while the tab is visible.
+
+let chatInited = false;
+let chatIsAdmin = false;
+let chatMe = null;
+let chatLastId = 0;
+let chatTimer = null;
+
+async function initChat() {
+    if (chatInited) return; // render() reruns after edits/RSVPs; wire once
+    chatInited = true;
+
+    const ok = await fetchChat(true);
+    if (!ok) return; // 403: not a member — section stays hidden
+
+    document.getElementById('chat-section').classList.remove('hidden');
+    const input = document.getElementById('chat-input');
+    const sendBtn = document.getElementById('chat-send-btn');
+    sendBtn.addEventListener('click', sendChatMessage);
+    input.addEventListener('keydown', (e) => { if (e.key === 'Enter') sendChatMessage(); });
+
+    const schedule = () => {
+        clearInterval(chatTimer);
+        chatTimer = setInterval(() => fetchChat(false), 5000);
+    };
+    schedule();
+    // Don't burn serverless invocations while the tab is hidden.
+    document.addEventListener('visibilitychange', () => {
+        if (document.hidden) clearInterval(chatTimer);
+        else { fetchChat(false); schedule(); }
+    });
+}
+
+async function fetchChat(initial) {
+    try {
+        const res = await fetch(`/api/events/${eventId}/messages?after=${chatLastId}`, {
+            credentials: 'include',
+        });
+        if (!res.ok) return false;
+        const data = await res.json();
+        chatIsAdmin = data.is_admin;
+        chatMe = data.me;
+        if (initial && data.messages.length === 0) {
+            renderChatEmpty();
+        }
+        for (const msg of data.messages) {
+            appendChatMessage(msg);
+            chatLastId = Math.max(chatLastId, msg.id);
+        }
+        return true;
+    } catch (error) {
+        if (initial) console.error('Chat load failed:', error);
+        return false;
+    }
+}
+
+function renderChatEmpty() {
+    const list = document.getElementById('chat-messages');
+    if (!list.querySelector('.chat-empty') && list.children.length === 0) {
+        const empty = document.createElement('div');
+        empty.className = 'chat-empty';
+        empty.textContent = 'No messages yet — say hi!';
+        list.appendChild(empty);
+    }
+}
+
+function appendChatMessage(msg) {
+    const list = document.getElementById('chat-messages');
+    list.querySelector('.chat-empty')?.remove();
+
+    const el = document.createElement('div');
+    el.className = 'chat-msg' + (msg.user_id === chatMe ? ' mine' : '');
+    el.dataset.messageId = msg.id;
+
+    const header = document.createElement('div');
+    const author = document.createElement('span');
+    author.className = 'chat-author';
+    author.textContent = displayName(msg);
+    const time = document.createElement('span');
+    time.className = 'chat-time';
+    time.textContent = formatChatTime(msg.created_at);
+    header.appendChild(author);
+    header.appendChild(time);
+
+    // Authors can delete their own; the host (admin) can delete anything.
+    if (chatIsAdmin || msg.user_id === chatMe) {
+        const del = document.createElement('button');
+        del.type = 'button';
+        del.className = 'chat-delete';
+        del.textContent = '[×]';
+        del.title = 'Delete message';
+        del.addEventListener('click', async () => {
+            try {
+                const res = await fetch(`/api/events/${eventId}/messages/${msg.id}`, {
+                    method: 'DELETE',
+                    credentials: 'include',
+                });
+                if (res.ok) {
+                    el.remove();
+                    renderChatEmpty();
+                }
+            } catch (error) {
+                console.error('Delete message failed:', error);
+            }
+        });
+        header.appendChild(del);
+    }
+
+    const body = document.createElement('div');
+    body.className = 'chat-body';
+    body.textContent = msg.body;
+
+    el.appendChild(header);
+    el.appendChild(body);
+    list.appendChild(el);
+    list.scrollTop = list.scrollHeight;
+}
+
+async function sendChatMessage() {
+    const input = document.getElementById('chat-input');
+    const message = document.getElementById('chat-message');
+    const body = input.value.trim();
+    if (!body) return;
+    input.value = '';
+    message.textContent = '';
+    try {
+        const res = await fetch(`/api/events/${eventId}/messages`, {
+            method: 'POST',
+            credentials: 'include',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ body }),
+        });
+        if (!res.ok) {
+            const err = await res.json().catch(() => ({}));
+            message.textContent = err.message || 'Could not send.';
+            message.className = 'message error';
+            input.value = body; // give the text back
+            return;
+        }
+        await fetchChat(false); // pick up our own message (and any others)
+    } catch (error) {
+        console.error('Send failed:', error);
+        message.textContent = 'Could not send.';
+        message.className = 'message error';
+        input.value = body;
+    }
+}
+
+function formatChatTime(iso) {
+    const d = new Date(iso);
+    if (Number.isNaN(d.getTime())) return '';
+    const today = new Date().toDateString() === d.toDateString();
+    return today
+        ? d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
+        : d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+          + ' ' + d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
 }
 
 /* ---- Formatting helpers ---- */
