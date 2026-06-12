@@ -65,13 +65,41 @@ router.get('/api/geo/suggest', requireAuth, async (req, res) => {
 // (Hobby plan allows daily only; 13:00 UTC is past 5 AM in all US timezones) —
 // on Pro, switch it to "0 * * * *" for exact 5 AM local runs. ?force=1 runs
 // every cluster immediately (manual testing).
+// Passed public events get discarded — unless an exclusive e-vite was forked
+// from them, in which case the row stays so the fork's "Based on" link keeps
+// working. Times are stored without a timezone and NOW() is UTC, so the 13h
+// grace (12h max westward offset + the 1h linger) guarantees nothing is
+// deleted before it's truly over anywhere; the frontend handles the precise
+// hide-after-one-hour in the viewer's local time. RSVPs and invitations go
+// with the event via ON DELETE CASCADE.
+async function cleanupPassedPublicEvents() {
+    const result = await db.query(
+        `DELETE FROM events e
+         WHERE e.event_type = 'public'
+           AND (e.event_date + e.event_time) < NOW() - INTERVAL '13 hours'
+           AND NOT EXISTS (
+               SELECT 1 FROM events f WHERE f.source_event_id = e.id
+           )
+         RETURNING e.id`
+    );
+    if (result.rows.length) {
+        logger.info(`Cleanup: discarded ${result.rows.length} passed public event(s)`);
+    }
+    return result.rows.length;
+}
+
 router.get('/api/agent/run', async (req, res) => {
     if (!isAuthorized(req)) {
         return res.status(401).json({ message: 'Unauthorized' });
     }
     try {
+        const discarded = await cleanupPassedPublicEvents()
+            .catch((err) => {
+                logger.error(`Cleanup failed: ${err.message}`);
+                return 0;
+            });
         const summary = await runDueClusters({ force: req.query.force === '1' });
-        res.json(summary);
+        res.json({ ...summary, discarded });
     } catch (error) {
         logger.error(`Agent run failed: ${error.message}`);
         res.status(500).json({ message: 'Agent run failed', error: error.message });

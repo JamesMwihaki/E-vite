@@ -282,7 +282,13 @@ function isPastEvent(event) {
     const datePart = String(event.event_date).slice(0, 10);
     const timePart = (event.event_time || '23:59:59').slice(0, 8);
     const dt = new Date(`${datePart}T${timePart}`);
-    return !Number.isNaN(dt.getTime()) && dt < new Date();
+    if (Number.isNaN(dt.getTime())) return false;
+    // Public events linger for an hour after start ("it just started, head
+    // over"); exclusive ones drop off at start time as before.
+    if (event.event_type === 'public') {
+        dt.setHours(dt.getHours() + 1);
+    }
+    return dt < new Date();
 }
 
 // Built from the date string + event_time, like the detail page does.
