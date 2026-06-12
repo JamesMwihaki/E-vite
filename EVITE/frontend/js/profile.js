@@ -32,18 +32,22 @@ const passwordMsgEl = document.getElementById('password_message');
     loadStats();
 
     // Device location is the primary source: if permission was already
-    // granted and no city is set yet, fill it in silently (no permission
-    // popup). The text field stays as the manual fallback.
+    // granted, detect silently (no permission popup). An empty field is
+    // filled in; a different saved city just gets a hint, never overwritten.
+    // The text field stays as the manual fallback.
     if (navigator.permissions && navigator.permissions.query) {
         navigator.permissions.query({ name: 'geolocation' })
             .then((status) => {
-                if (status.state === 'granted' && !locationInput.value) {
-                    detectLocation(true);
-                }
+                if (status.state === 'granted') detectLocation(true);
             })
             .catch(() => {});
     }
 })();
+
+// Coordinates from the last successful detection; sent with the save only
+// while the field still holds that detected city, so hand-edits don't carry
+// stale coordinates (the server geocodes typed cities itself).
+let detected = null;
 
 function detectLocation(silent) {
     if (!navigator.geolocation) {
@@ -62,8 +66,20 @@ function detectLocation(silent) {
                 if (!silent) setMsg(profileMsgEl, data.message || 'Could not detect your city — type it instead.', 'error');
                 return;
             }
+            detected = {
+                location: data.location,
+                latitude: pos.coords.latitude,
+                longitude: pos.coords.longitude,
+            };
+            const current = locationInput.value.trim();
+            if (silent && current && current.toLowerCase() !== data.location.toLowerCase()) {
+                setMsg(profileMsgEl, `⌖ You appear to be in ${data.location} — tap USE MY LOCATION to update.`);
+                return;
+            }
             locationInput.value = data.location;
-            setMsg(profileMsgEl, `Detected ${data.location} — click SAVE CHANGES to apply.`, 'success');
+            if (current.toLowerCase() !== data.location.toLowerCase()) {
+                setMsg(profileMsgEl, `Detected ${data.location} — click SAVE CHANGES to apply.`, 'success');
+            }
         } catch (error) {
             console.error('Location detect failed:', error);
             if (!silent) setMsg(profileMsgEl, 'Could not detect your city — type it instead.', 'error');
@@ -110,11 +126,16 @@ async function loadStats() {
 
 async function saveProfile() {
     setMsg(profileMsgEl, '');
+    const locationValue = locationInput.value.trim() || null;
+    const useDetected = detected && locationValue
+        && locationValue.toLowerCase() === detected.location.toLowerCase();
     const payload = {
         first_name: firstNameInput.value.trim() || null,
         last_name: lastNameInput.value.trim() || null,
         email: emailInput.value.trim(),
-        location: locationInput.value.trim() || null,
+        location: locationValue,
+        latitude: useDetected ? detected.latitude : null,
+        longitude: useDetected ? detected.longitude : null,
         // Sent silently so the event scout can run at 5 AM in the user's
         // local time without asking them to pick a timezone.
         timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || null,

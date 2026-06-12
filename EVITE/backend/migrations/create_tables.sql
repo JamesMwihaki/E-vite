@@ -82,9 +82,12 @@ ALTER TABLE events ADD COLUMN IF NOT EXISTS source_event_id INTEGER REFERENCES e
 
 -- Event-scout agent: users opt in by setting a city on their profile. The
 -- timezone is captured silently from the browser so the agent can run at
--- 5 AM in each user's local time.
+-- 5 AM in each user's local time. Coordinates (from device geolocation or
+-- geocoding the city) power radius-based visibility of discovered events.
 ALTER TABLE users ADD COLUMN IF NOT EXISTS location TEXT;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS timezone TEXT;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS latitude DOUBLE PRECISION;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS longitude DOUBLE PRECISION;
 
 -- Agent-discovered events live in the regular events table (public, RSVP-able,
 -- forkable) with extra provenance columns. external_key dedupes re-discoveries
@@ -94,6 +97,8 @@ ALTER TABLE events ADD COLUMN IF NOT EXISTS discovered BOOLEAN NOT NULL DEFAULT 
 ALTER TABLE events ADD COLUMN IF NOT EXISTS source_url TEXT;
 ALTER TABLE events ADD COLUMN IF NOT EXISTS external_key TEXT;
 ALTER TABLE events ADD COLUMN IF NOT EXISTS city TEXT;
+ALTER TABLE events ADD COLUMN IF NOT EXISTS latitude DOUBLE PRECISION;
+ALTER TABLE events ADD COLUMN IF NOT EXISTS longitude DOUBLE PRECISION;
 CREATE UNIQUE INDEX IF NOT EXISTS events_external_key_uniq ON events(external_key);
 
 -- The agent's knowledge base: places it has learned host events ("this bar is

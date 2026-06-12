@@ -82,8 +82,9 @@ router.get('/api/create_event', requireAuth, async (req, res) => {
 
     // Visibility:
     //   - public events are visible to everyone, except agent-discovered ones,
-    //     which only show to users whose profile location matches the city
-    //     they were discovered for (no location set = no discovered events)
+    //     which show within 60 miles of the viewer's coordinates (haversine);
+    //     exact city match is the fallback when either side lacks coordinates
+    //     (no location set = no discovered events)
     //   - private events are visible only to the creator, to a directly-invited
     //     user (invitee_user_id), or to a user whose email matches an invitation
     const queryText = `
@@ -92,8 +93,19 @@ router.get('/api/create_event', requireAuth, async (req, res) => {
         FROM events e
         WHERE (e.event_type = 'public'
                AND (e.discovered = FALSE
-                    OR LOWER(COALESCE(e.city, '')) =
-                       LOWER(TRIM(COALESCE((SELECT location FROM users WHERE id = $1), '')))))
+                    OR EXISTS (
+                        SELECT 1 FROM users me
+                        WHERE me.id = $1
+                          AND (
+                              LOWER(COALESCE(e.city, '')) = LOWER(TRIM(COALESCE(me.location, '')))
+                              OR (me.latitude IS NOT NULL AND e.latitude IS NOT NULL
+                                  AND 3959 * acos(LEAST(1.0,
+                                        cos(radians(me.latitude)) * cos(radians(e.latitude))
+                                      * cos(radians(e.longitude) - radians(me.longitude))
+                                      + sin(radians(me.latitude)) * sin(radians(e.latitude))
+                                    )) <= 60)
+                          )
+                    )))
            OR e.creator_id = $1
            OR EXISTS (
                SELECT 1

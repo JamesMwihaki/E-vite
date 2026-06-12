@@ -2,7 +2,7 @@ const express = require('express');
 const logger = require('../utils/logger');
 const db = require('../db/database');
 const { hashPassword, verifyPassword } = require('../utils/passwords');
-const { runCityIfDue, isCityDue } = require('../agent/event-scout');
+const { runCityIfDue, isCityDue, geocode } = require('../agent/event-scout');
 
 // On Vercel, work kicked off after the response needs waitUntil to keep the
 // function alive. Locally (plain node server) a floating promise is fine.
@@ -146,25 +146,49 @@ router.put('/api/me', async (req, res) => {
     if (!req.session || !req.session.user_id) {
         return res.status(401).json({ message: 'Not authenticated' });
     }
-    const { first_name, last_name, email, location, timezone } = req.body;
+    const { first_name, last_name, email, location, timezone, latitude, longitude } = req.body;
     if (!email || !EMAIL_REGEX.test(email)) {
         return res.status(400).json({ message: 'Valid email is required' });
     }
     try {
         const prev = await db.query(
-            'SELECT location, timezone FROM users WHERE id = $1',
+            'SELECT location, timezone, latitude, longitude FROM users WHERE id = $1',
             [req.session.user_id]
         );
+
+        // Coordinates power the 60-mile visibility radius for discovered
+        // events. Prefer the device coordinates sent with a detected location;
+        // for a hand-typed city, geocode it; keep the old ones when the
+        // location didn't change; clear them when the location is cleared.
+        const newLocation = (location || '').trim() || null;
+        const oldLocationNorm = (prev.rows[0]?.location || '').trim().toLowerCase();
+        const changed = (newLocation || '').toLowerCase() !== oldLocationNorm;
+        let lat = latitude !== null && Number.isFinite(Number(latitude))
+            && Math.abs(Number(latitude)) <= 90 ? Number(latitude) : null;
+        let lon = longitude !== null && Number.isFinite(Number(longitude))
+            && Math.abs(Number(longitude)) <= 180 ? Number(longitude) : null;
+        if (newLocation && (lat === null || lon === null)) {
+            if (!changed) {
+                lat = prev.rows[0]?.latitude ?? null;
+                lon = prev.rows[0]?.longitude ?? null;
+            } else {
+                const coords = await geocode(newLocation).catch(() => null);
+                lat = coords ? Number(coords.lat) : null;
+                lon = coords ? Number(coords.lon) : null;
+            }
+        }
+        if (!newLocation) { lat = null; lon = null; }
 
         // location opts the user into nearby-event discovery; timezone comes
         // from the browser so the scout can run at 5 AM local time.
         const result = await db.query(
             `UPDATE users SET first_name = $1, last_name = $2, email = $3,
-                              location = $4, timezone = COALESCE($5, timezone)
-             WHERE id = $6
+                              location = $4, timezone = COALESCE($5, timezone),
+                              latitude = $6, longitude = $7
+             WHERE id = $8
              RETURNING id, username, email, first_name, last_name, location, timezone, created_at`,
             [first_name || null, last_name || null, email,
-             (location || '').trim() || null, (timezone || '').trim() || null,
+             newLocation, (timezone || '').trim() || null, lat, lon,
              req.session.user_id]
         );
         if (result.rows.length === 0) {
@@ -175,10 +199,8 @@ router.put('/api/me', async (req, res) => {
         // A changed location kicks off the event scout for the new city right
         // away (in the background) instead of waiting for the daily cron —
         // unless that city was already scouted today.
-        const newLocation = result.rows[0].location;
-        const oldLocation = (prev.rows[0]?.location || '').trim().toLowerCase();
         let scouting = false;
-        if (newLocation && newLocation.trim().toLowerCase() !== oldLocation) {
+        if (newLocation && changed) {
             const tz = result.rows[0].timezone;
             if (await isCityDue(newLocation, tz)) {
                 scouting = true;

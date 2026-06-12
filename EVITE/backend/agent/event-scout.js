@@ -235,24 +235,26 @@ function externalKey(title, date, venue) {
     return `${title}|${date}|${venue}`.toLowerCase().replace(/\s+/g, ' ').trim();
 }
 
-async function saveEvents(city, events, startDate, endDate, scoutId) {
+async function saveEvents(city, events, startDate, endDate, scoutId, coords) {
     let saved = 0;
     for (const e of events) {
         if (!e.title || !DATE_REGEX.test(e.date || '')) continue;
         if (e.date < startDate || e.date > endDate) continue;
         const time = /^\d{2}:\d{2}/.test(e.time || '') ? e.time.slice(0, 5) : '19:00';
         const location = [e.venue, e.address].filter(Boolean).join(' — ');
+        // City-level coordinates are enough for the 60-mile visibility radius.
         const result = await db.query(
             `INSERT INTO events
                  (title, description, event_date, event_time, location, event_type,
-                  creator_id, discovered, source_url, external_key, city)
-             VALUES ($1, $2, $3, $4, $5, 'public', $6, TRUE, $7, $8, $9)
+                  creator_id, discovered, source_url, external_key, city, latitude, longitude)
+             VALUES ($1, $2, $3, $4, $5, 'public', $6, TRUE, $7, $8, $9, $10, $11)
              ON CONFLICT (external_key) DO NOTHING
              RETURNING id`,
             [
                 String(e.title).slice(0, 255), e.description || null, e.date, time,
                 location || null, scoutId, e.source_url || null,
                 externalKey(e.title, e.date, e.venue || ''), city,
+                coords ? Number(coords.lat) : null, coords ? Number(coords.lon) : null,
             ]
         );
         saved += result.rows.length;
@@ -297,7 +299,7 @@ async function runForCity(city, localDate) {
     );
 
     const { events, venues } = await askClaude(city, startDate, endDate, venuesRes.rows, tmEvents);
-    const saved = await saveEvents(city, events, startDate, endDate, scoutId);
+    const saved = await saveEvents(city, events, startDate, endDate, scoutId, coords);
     await saveVenues(city, venues);
 
     logger.info(`Scout run for ${city}: ${events.length} candidates, ${saved} new, ${venues.length} venue notes`);
@@ -386,4 +388,4 @@ async function runDueClusters({ force = false } = {}) {
     return summary;
 }
 
-module.exports = { runDueClusters, runForCity, runCityIfDue, isCityDue, reverseGeocode };
+module.exports = { runDueClusters, runForCity, runCityIfDue, isCityDue, geocode, reverseGeocode };
