@@ -205,7 +205,7 @@ async function fetchTicketmaster(coords, startDate, endDate) {
     }).filter(e => e.title && e.date);
 }
 
-async function askClaude(city, startDate, endDate, knownVenues, knownEvents, ticketmasterEvents) {
+async function askClaude(city, startDate, endDate, knownVenues, knownEvents, knownSources, ticketmasterEvents) {
     const anthropic = getAnthropic();
     if (!anthropic) return { events: ticketmasterEvents, venues: [] };
 
@@ -239,6 +239,11 @@ Aim for 5-12 events total. If you cannot verify anything, return empty arrays.`;
 Known venues in the knowledge base:
 ${knownVenues.length
     ? knownVenues.map(v => `- ${v.name}: ${v.notes || 'no notes'}`).join('\n')
+    : '(none yet)'}
+
+Listing sources that produced events for this city before — check these first:
+${knownSources.length
+    ? knownSources.map(s => `- ${s.domain} (${s.hits} event${s.hits === 1 ? '' : 's'} found previously)`).join('\n')
     : '(none yet)'}
 
 Already in our database — do NOT include these again, even reworded:
@@ -351,6 +356,34 @@ async function saveEvents(city, events, startDate, endDate, scoutId, coords) {
     return saved;
 }
 
+function domainOf(url) {
+    try {
+        return new URL(url).hostname.replace(/^www\./, '');
+    } catch {
+        return null;
+    }
+}
+
+// Remember which listing sites actually produced events for this city, so
+// future runs can be told where looking has paid off before.
+async function saveSources(city, events) {
+    const counts = new Map();
+    for (const e of events) {
+        const domain = e.source_url && domainOf(e.source_url);
+        if (domain) counts.set(domain, (counts.get(domain) || 0) + 1);
+    }
+    for (const [domain, hits] of counts) {
+        await db.query(
+            `INSERT INTO agent_sources (city, domain, hits)
+             VALUES ($1, $2, $3)
+             ON CONFLICT (city, domain)
+             DO UPDATE SET hits = agent_sources.hits + EXCLUDED.hits,
+                           last_seen = NOW()`,
+            [city, domain, hits]
+        );
+    }
+}
+
 async function saveVenues(city, venues) {
     for (const v of venues) {
         if (!v.name) continue;
@@ -396,11 +429,17 @@ async function runForCity(city, localDate) {
          ORDER BY event_date LIMIT 60`,
         [city, startDate]
     );
+    const sourcesRes = await db.query(
+        `SELECT domain, hits FROM agent_sources WHERE LOWER(city) = LOWER($1)
+         ORDER BY hits DESC, last_seen DESC LIMIT 10`,
+        [city]
+    );
 
     const { events, venues } = await askClaude(
-        city, startDate, endDate, venuesRes.rows, knownRes.rows, tmEvents);
+        city, startDate, endDate, venuesRes.rows, knownRes.rows, sourcesRes.rows, tmEvents);
     const saved = await saveEvents(city, events, startDate, endDate, scoutId, coords);
     await saveVenues(city, venues);
+    await saveSources(city, events);
 
     logger.info(`Scout run for ${city}: ${events.length} candidates, ${saved} new, ${venues.length} venue notes`);
     return saved;

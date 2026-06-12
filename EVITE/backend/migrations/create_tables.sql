@@ -113,6 +113,19 @@ CREATE TABLE IF NOT EXISTS agent_venues (
     UNIQUE(city, name)
 );
 
+-- Listing sites that have yielded events for a city before (songkick.com,
+-- a venue's own calendar, ...). Fed back to the agent as "check these first";
+-- hits counts how many events each source has produced over time.
+CREATE TABLE IF NOT EXISTS agent_sources (
+    id SERIAL PRIMARY KEY,
+    city TEXT NOT NULL,
+    domain TEXT NOT NULL,
+    hits INTEGER NOT NULL DEFAULT 0,
+    last_seen TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(city, domain)
+);
+
 -- One row per city per local date keeps the hourly cron idempotent: a cluster
 -- runs once after 5 AM local time and is skipped for the rest of that day.
 CREATE TABLE IF NOT EXISTS agent_runs (
