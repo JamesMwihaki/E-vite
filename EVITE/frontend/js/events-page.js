@@ -211,7 +211,7 @@ function buildEventCard(event, rsvpStatus) {
 
     card.querySelector('.event-title').textContent = event.title || '';
     card.querySelector('.event-location').textContent = `Location: ${event.location || ''}`;
-    card.querySelector('.event-date').textContent = formatEventDate(event.event_date);
+    card.querySelector('.event-date').textContent = formatEventDate(event);
     card.querySelector('.event-description').textContent = `Description: ${event.description || ''}`;
 
     if (showRsvp) {
@@ -285,14 +285,20 @@ function isPastEvent(event) {
     return !Number.isNaN(dt.getTime()) && dt < new Date();
 }
 
-function formatEventDate(eventTime) {
-    if (!eventTime) return '';
-    const date = new Date(eventTime);
-    return date.toLocaleDateString('en-US', {
+// Built from the date string + event_time, like the detail page does.
+// Parsing the raw event_date timestamp shifts the day for viewers west of
+// UTC (a June 20 event renders as June 19, 7:00 PM in Central).
+function formatEventDate(event) {
+    if (!event.event_date) return '';
+    const datePart = String(event.event_date).slice(0, 10);
+    const timePart = (event.event_time || '00:00:00').slice(0, 8);
+    const dt = new Date(`${datePart}T${timePart}`);
+    if (Number.isNaN(dt.getTime())) return '';
+    const dateStr = dt.toLocaleDateString('en-US', {
         weekday: 'long',
         month: 'short',
         day: 'numeric',
-        hour: 'numeric',
-        minute: '2-digit'
     });
+    if (!event.event_time) return dateStr;
+    return `${dateStr} · ${dt.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}`;
 }
