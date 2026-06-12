@@ -108,8 +108,12 @@ function wireDateFilter() {
         setActiveFilterBtn(null); // custom range — no preset highlighted
         renderLists();
     };
-    fromInput.addEventListener('change', onDateInput);
-    toInput.addEventListener('change', onDateInput);
+    // Both events: 'input' fires as soon as a typed date becomes valid;
+    // 'change' covers browsers that only commit date fields on blur.
+    for (const input of [fromInput, toInput]) {
+        input.addEventListener('input', onDateInput);
+        input.addEventListener('change', onDateInput);
+    }
 }
 
 function setActiveFilterBtn(activeBtn) {
