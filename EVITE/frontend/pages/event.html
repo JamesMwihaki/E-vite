@@ -215,6 +215,11 @@
             padding: 8px 4px;
         }
 
+        /* "Add inviter as friend" for email-invited viewers */
+        .friend-offer { margin-top: 8px; }
+        .friend-offer .rsvp-btn:disabled { cursor: default; opacity: 0.8; }
+        .friend-offer .friend-pending { font-size: 0.85em; color: #777; }
+
         /* ---- Invited list management + group chat ---- */
         .person-remove {
             flex-shrink: 0;
@@ -375,6 +380,7 @@
                 <span class="type-badge" id="type-badge"></span>
             </div>
             <div class="hosted-by" id="hosted-by"></div>
+            <div class="friend-offer hidden" id="friend-offer"></div>
             <div class="based-on hidden" id="based-on"></div>
             <div class="countdown" id="countdown"></div>
             <div class="detail-grid">

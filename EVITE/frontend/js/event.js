@@ -90,6 +90,8 @@ function render(data) {
     document.getElementById('event-desc').textContent = event.description || 'No description yet.';
     renderCountdown(event.event_date, event.event_time);
 
+    renderFriendOffer(event, is_creator);
+
     // Forked exclusive events link back to the public event they came from.
     const basedOn = document.getElementById('based-on');
     if (event.source_event_id && event.source_title) {
@@ -496,6 +498,56 @@ async function deleteEvent(message) {
         message.textContent = 'Delete failed. Is the backend running?';
         message.className = 'message error';
     }
+}
+
+/* ---- Add the email-inviter as a friend (same rules as the home cards) ---- */
+
+function renderFriendOffer(event, isCreator) {
+    const offer = document.getElementById('friend-offer');
+    offer.innerHTML = '';
+    offer.classList.add('hidden');
+
+    // Only for email-invited viewers, and only until they're friends.
+    if (isCreator || !event.inviter_id || event.inviter_friend_status === 'accepted') return;
+    offer.classList.remove('hidden');
+
+    if (event.inviter_friend_status === 'pending') {
+        const pending = document.createElement('span');
+        pending.className = 'friend-pending';
+        pending.textContent = '[ FRIEND REQUEST PENDING ]';
+        offer.appendChild(pending);
+        return;
+    }
+
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'rsvp-btn';
+    const inviterName = event.inviter_first_name || event.inviter_username || 'inviter';
+    btn.textContent = `[ + ADD ${inviterName.toUpperCase()} AS FRIEND ]`;
+    btn.addEventListener('click', async () => {
+        btn.disabled = true;
+        try {
+            const res = await fetch('/api/friends/request', {
+                method: 'POST',
+                credentials: 'include',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ addressee_id: event.inviter_id }),
+            });
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok) {
+                btn.disabled = false;
+                alert(`Friend request failed: ${data.message || res.status}`);
+                return;
+            }
+            const nowFriends = data.friendship?.status === 'accepted'
+                || /already friends|accepted/i.test(data.message || '');
+            btn.textContent = nowFriends ? '[ ✓ FRIENDS ]' : '[ ✓ REQUEST SENT ]';
+        } catch (error) {
+            console.error('Friend request failed:', error);
+            btn.disabled = false;
+        }
+    });
+    offer.appendChild(btn);
 }
 
 /* ---- Group chat ---- */

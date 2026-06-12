@@ -166,12 +166,28 @@ router.get('/api/events/:id', requireAuth, async (req, res) => {
                     s.title AS source_title,
                     u.username AS creator_username,
                     u.first_name AS creator_first_name,
-                    u.last_name AS creator_last_name
+                    u.last_name AS creator_last_name,
+                    inv.inviter AS inviter_id,
+                    iu.username AS inviter_username,
+                    iu.first_name AS inviter_first_name,
+                    fr.status AS inviter_friend_status
              FROM events e
              JOIN users u ON u.id = e.creator_id
              LEFT JOIN events s ON s.id = e.source_event_id
+             LEFT JOIN LATERAL (
+                 SELECT i2.inviter
+                 FROM invitations i2
+                 WHERE i2.event_id = e.id
+                   AND i2.invitee_email = (SELECT email FROM users WHERE id = $2)
+                   AND i2.inviter <> $2
+                 LIMIT 1
+             ) inv ON TRUE
+             LEFT JOIN users iu ON iu.id = inv.inviter
+             LEFT JOIN friendships fr
+                 ON (fr.requester_id = $2 AND fr.addressee_id = inv.inviter)
+                 OR (fr.addressee_id = $2 AND fr.requester_id = inv.inviter)
              WHERE e.id = $1`,
-            [eventId]
+            [eventId, userId]
         );
         if (eventResult.rows.length === 0) {
             return res.status(404).json({ message: 'Event not found' });
