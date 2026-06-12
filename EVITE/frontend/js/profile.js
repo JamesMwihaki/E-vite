@@ -44,10 +44,100 @@ const passwordMsgEl = document.getElementById('password_message');
     }
 })();
 
-// Coordinates from the last successful detection; sent with the save only
-// while the field still holds that detected city, so hand-edits don't carry
-// stale coordinates (the server geocodes typed cities itself).
+// Coordinates from the last successful detection or chosen suggestion; sent
+// with the save only while the field still holds that exact city, so hand
+// edits don't carry stale coordinates (the server geocodes typed cities).
 let detected = null;
+
+/* ---- city typeahead ---- */
+
+const suggestBox = document.getElementById('location-suggest');
+let suggestTimer = null;
+let suggestAbort = null;
+let suggestItems = [];
+let suggestIndex = -1;
+
+locationInput.addEventListener('input', () => {
+    const q = locationInput.value.trim();
+    clearTimeout(suggestTimer);
+    if (q.length < 2) { hideSuggest(); return; }
+    // Debounced to stay friendly to the geocoder while typing.
+    suggestTimer = setTimeout(() => fetchSuggestions(q), 350);
+});
+
+locationInput.addEventListener('keydown', (e) => {
+    if (suggestBox.hidden) return;
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+        e.preventDefault();
+        const dir = e.key === 'ArrowDown' ? 1 : -1;
+        suggestIndex = (suggestIndex + dir + suggestItems.length) % suggestItems.length;
+        renderSuggestHighlight();
+    } else if (e.key === 'Enter' && suggestIndex >= 0) {
+        e.preventDefault();
+        chooseSuggestion(suggestItems[suggestIndex]);
+    } else if (e.key === 'Escape') {
+        hideSuggest();
+    }
+});
+
+// Delay so a mousedown on a suggestion lands before the list disappears.
+locationInput.addEventListener('blur', () => setTimeout(hideSuggest, 150));
+
+async function fetchSuggestions(q) {
+    if (suggestAbort) suggestAbort.abort();
+    suggestAbort = new AbortController();
+    try {
+        const response = await fetch(`/api/geo/suggest?q=${encodeURIComponent(q)}`, {
+            credentials: 'include',
+            signal: suggestAbort.signal,
+        });
+        if (!response.ok) { hideSuggest(); return; }
+        const items = await response.json();
+        // Ignore stale responses if the field moved on while we fetched.
+        if (locationInput.value.trim() !== q) return;
+        suggestItems = items;
+        suggestIndex = -1;
+        if (!items.length) { hideSuggest(); return; }
+        suggestBox.innerHTML = '';
+        items.forEach((item, i) => {
+            const row = document.createElement('div');
+            row.className = 'suggest-item';
+            row.textContent = item.location;
+            // mousedown (not click) so it beats the input's blur handler.
+            row.addEventListener('mousedown', (e) => {
+                e.preventDefault();
+                chooseSuggestion(item);
+            });
+            row.addEventListener('mouseenter', () => {
+                suggestIndex = i;
+                renderSuggestHighlight();
+            });
+            suggestBox.appendChild(row);
+        });
+        suggestBox.hidden = false;
+    } catch (error) {
+        if (error.name !== 'AbortError') console.error('Suggest failed:', error);
+    }
+}
+
+function renderSuggestHighlight() {
+    [...suggestBox.children].forEach((el, i) =>
+        el.classList.toggle('active', i === suggestIndex));
+}
+
+function chooseSuggestion(item) {
+    locationInput.value = item.location;
+    detected = item; // {location, latitude, longitude} — exact coords, no re-geocode
+    hideSuggest();
+    setMsg(profileMsgEl, `${item.location} selected — click SAVE CHANGES to apply.`, 'success');
+}
+
+function hideSuggest() {
+    suggestBox.hidden = true;
+    suggestBox.innerHTML = '';
+    suggestItems = [];
+    suggestIndex = -1;
+}
 
 function detectLocation(silent) {
     if (!navigator.geolocation) {

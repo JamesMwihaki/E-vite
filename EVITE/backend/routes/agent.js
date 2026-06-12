@@ -1,7 +1,8 @@
 const express = require('express');
 const logger = require('../utils/logger');
+const db = require('../db/database');
 const { requireAuth } = require('../middleware/auth');
-const { runDueClusters, reverseGeocode } = require('../agent/event-scout');
+const { runDueClusters, reverseGeocode, suggestCities } = require('../agent/event-scout');
 
 const router = express.Router();
 
@@ -38,6 +39,26 @@ function isAuthorized(req) {
     }
     return req.headers.authorization === `Bearer ${secret}`;
 }
+
+// Location-field typeahead: partial text -> up to 5 canonical "City, ST"
+// suggestions with coordinates. Keeps spellings consistent so city clusters
+// don't fragment.
+router.get('/api/geo/suggest', requireAuth, async (req, res) => {
+    const q = (req.query.q || '').trim();
+    if (q.length < 2) return res.json([]);
+    try {
+        // Bias ranking toward the user's stored coordinates when available.
+        const me = await db.query(
+            'SELECT latitude AS lat, longitude AS lon FROM users WHERE id = $1',
+            [req.session.user_id]
+        );
+        const bias = me.rows[0]?.lat != null ? me.rows[0] : null;
+        res.json(await suggestCities(q, bias));
+    } catch (error) {
+        logger.error(`City suggest failed: ${error.message}`);
+        res.json([]); // typeahead is best-effort; an empty list degrades gracefully
+    }
+});
 
 // Cron target. Each user-city cluster runs once per local day, on the first
 // tick past 5 AM local time. The vercel.json schedule is daily at 13:00 UTC

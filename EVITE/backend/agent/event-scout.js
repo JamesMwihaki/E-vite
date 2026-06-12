@@ -85,6 +85,16 @@ async function geocode(city) {
     return { lat: rows[0].lat, lon: rows[0].lon };
 }
 
+// Nominatim address -> "City, ST". One formatter for reverse geocoding and
+// typeahead suggestions, so every path produces the same canonical string.
+function formatPlace(a) {
+    const city = a.city || a.town || a.village || a.municipality || a.county;
+    if (!city) return null;
+    const iso = a['ISO3166-2-lvl4']; // e.g. "US-TX"
+    const region = iso && iso.includes('-') ? iso.split('-')[1] : a.state;
+    return region ? `${city}, ${region}` : city;
+}
+
 // Browser coordinates -> "City, ST" for the profile location field, so
 // device-detected and hand-typed locations land in the same format.
 async function reverseGeocode(lat, lon) {
@@ -95,12 +105,64 @@ async function reverseGeocode(lat, lon) {
     });
     if (!res.ok) return null;
     const data = await res.json();
-    const a = data.address || {};
-    const city = a.city || a.town || a.village || a.municipality || a.county;
-    if (!city) return null;
-    const iso = a['ISO3166-2-lvl4']; // e.g. "US-TX"
-    const region = iso && iso.includes('-') ? iso.split('-')[1] : a.state;
-    return region ? `${city}, ${region}` : city;
+    return formatPlace(data.address || {});
+}
+
+const US_STATE_ABBR = {
+    Alabama: 'AL', Alaska: 'AK', Arizona: 'AZ', Arkansas: 'AR', California: 'CA',
+    Colorado: 'CO', Connecticut: 'CT', Delaware: 'DE', Florida: 'FL', Georgia: 'GA',
+    Hawaii: 'HI', Idaho: 'ID', Illinois: 'IL', Indiana: 'IN', Iowa: 'IA',
+    Kansas: 'KS', Kentucky: 'KY', Louisiana: 'LA', Maine: 'ME', Maryland: 'MD',
+    Massachusetts: 'MA', Michigan: 'MI', Minnesota: 'MN', Mississippi: 'MS',
+    Missouri: 'MO', Montana: 'MT', Nebraska: 'NE', Nevada: 'NV',
+    'New Hampshire': 'NH', 'New Jersey': 'NJ', 'New Mexico': 'NM', 'New York': 'NY',
+    'North Carolina': 'NC', 'North Dakota': 'ND', Ohio: 'OH', Oklahoma: 'OK',
+    Oregon: 'OR', Pennsylvania: 'PA', 'Rhode Island': 'RI', 'South Carolina': 'SC',
+    'South Dakota': 'SD', Tennessee: 'TN', Texas: 'TX', Utah: 'UT', Vermont: 'VT',
+    Virginia: 'VA', Washington: 'WA', 'West Virginia': 'WV', Wisconsin: 'WI',
+    Wyoming: 'WY', 'District of Columbia': 'DC',
+};
+
+// Typeahead for the profile location field. Nominatim only matches whole
+// names, so suggestions come from Photon (komoot's autocomplete geocoder,
+// built for prefix search). Results carry coordinates, so picking one needs
+// no later geocoding; US states are abbreviated to match the "City, ST"
+// format reverseGeocode produces.
+async function suggestCities(query, bias) {
+    const params = new URLSearchParams({ q: query, limit: '10', lang: 'en' });
+    for (const tag of ['place:city', 'place:town', 'place:village']) {
+        params.append('osm_tag', tag);
+    }
+    // Rank places near the user first (e.g. "aust" -> Austin, TX before
+    // Aust, England for a Texan). zoom + location_bias_scale strengthen the
+    // bias — Photon's default barely affects ranking.
+    if (bias && Number.isFinite(bias.lat) && Number.isFinite(bias.lon)) {
+        params.set('lat', String(bias.lat));
+        params.set('lon', String(bias.lon));
+        params.set('zoom', '8');
+        params.set('location_bias_scale', '0.5');
+    }
+    const res = await fetch(`https://photon.komoot.io/api/?${params}`, {
+        signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+    });
+    if (!res.ok) return [];
+    const data = await res.json();
+    const seen = new Set();
+    const out = [];
+    for (const feature of data.features || []) {
+        const p = feature.properties || {};
+        if (!p.name) continue;
+        const region = p.countrycode === 'US'
+            ? (US_STATE_ABBR[p.state] || p.state)
+            : (p.state || p.country);
+        const label = region ? `${p.name}, ${region}` : p.name;
+        if (seen.has(label.toLowerCase())) continue;
+        seen.add(label.toLowerCase());
+        const [lon, lat] = feature.geometry?.coordinates || [];
+        out.push({ location: label, latitude: Number(lat), longitude: Number(lon) });
+        if (out.length >= 5) break;
+    }
+    return out;
 }
 
 async function fetchTicketmaster(coords, startDate, endDate) {
@@ -388,4 +450,7 @@ async function runDueClusters({ force = false } = {}) {
     return summary;
 }
 
-module.exports = { runDueClusters, runForCity, runCityIfDue, isCityDue, geocode, reverseGeocode };
+module.exports = {
+    runDueClusters, runForCity, runCityIfDue, isCityDue,
+    geocode, reverseGeocode, suggestCities,
+};

@@ -141,6 +141,24 @@
 
         .field-label { display: block; margin-bottom: 6px; }
         .input-frame { padding: 6px 10px; margin-bottom: 14px; }
+
+        /* City typeahead under the location input */
+        .suggest-wrap { position: relative; margin-bottom: 14px; }
+        .suggest-wrap .input-frame { margin-bottom: 0; }
+        .suggest-list {
+            position: absolute;
+            top: 100%;
+            left: 0;
+            right: 0;
+            margin-top: 4px;
+            background: #fff;
+            border: 1px dashed #111;
+            z-index: 10;
+            max-height: 180px;
+            overflow-y: auto;
+        }
+        .suggest-item { padding: 6px 10px; cursor: pointer; }
+        .suggest-item:hover, .suggest-item.active { background: #111; color: #fff; }
         .input-frame input {
             background: transparent;
             border: none;
@@ -278,12 +296,15 @@
             </div>
 
             <label class="field-label" for="location">Location — city for nearby event discovery (e.g. Austin, TX)</label>
-            <div class="ascii-frame input-frame">
-                <span class="corner tl">+</span>
-                <span class="corner tr">+</span>
-                <span class="corner bl">+</span>
-                <span class="corner br">+</span>
-                <input type="text" id="location" autocomplete="address-level2" placeholder="Leave blank to opt out">
+            <div class="suggest-wrap">
+                <div class="ascii-frame input-frame">
+                    <span class="corner tl">+</span>
+                    <span class="corner tr">+</span>
+                    <span class="corner bl">+</span>
+                    <span class="corner br">+</span>
+                    <input type="text" id="location" autocomplete="off" placeholder="Leave blank to opt out">
+                </div>
+                <div class="suggest-list" id="location-suggest" hidden></div>
             </div>
 
             <div class="button-row" style="margin-bottom: 14px;">
