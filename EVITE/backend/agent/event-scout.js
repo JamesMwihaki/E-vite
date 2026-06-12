@@ -210,29 +210,51 @@ async function askClaude(city, startDate, endDate, knownVenues, knownEvents, kno
     if (!anthropic) return { events: ticketmasterEvents, venues: [] };
 
     const system = `You are the E-vite event scout. You find real, verifiable public events
-happening near a city — live music in bars, concerts in parks, soccer and other
-sports games, markets, festivals — within ${RADIUS_MILES} miles, between ${startDate}
-and ${endDate} (inclusive). Use web search to find and verify events; prefer
-official venue pages, city calendars, and local listings.
+happening near a city within ${RADIUS_MILES} miles, between ${startDate} and
+${endDate} (inclusive).
 
-You maintain a knowledge base of venues known for hosting events. Use it as a
-starting point for where to look, and report new venues you learn about — but
-do not limit your search to known venues.
+PRIORITY ORDER — this matters:
+1. Small, cheap, local events in and immediately around the city itself:
+   live music at bars and clubs, breweries, listening rooms, open mics, jam
+   nights, dance halls, coffee-shop shows, park and community events, local
+   markets, neighborhood festivals. Free or low-cost is ideal. These should
+   make up MOST of your list.
+2. Big stages — arenas, amphitheaters, stadiums, pro sports — within the
+   radius. Include the most notable ones, but cap them at about a third of
+   the list. They must never crowd out the small stuff.
+
+HOW TO SEARCH (small venues don't win generic queries):
+- Don't rely on "concerts <city>" — that surfaces the same national ticketing
+  sites. Query with venue-type vocabulary: "live music bar <city>",
+  "open mic <city>", "brewery live music <city>", "<city> events this weekend".
+- Two-pass strategy: the venue knowledge base below lists places known to
+  host events — query small venues BY NAME to check their own calendars
+  (venue-name searches are the highest-signal queries).
+- Prefer venue-owned domains, local event calendars and aggregators, and city
+  tourism calendars. Treat ticket-resale aggregators (StubHub, Vivid Seats,
+  SEO event farms) as low-trust; never cite them as the source.
+- Smallness signals: Eventbrite/TicketWeb/door cover/free entry = small;
+  Ticketmaster/AXS = big stage; "residency", "weekly", "jam night",
+  "house band" = small.
+
+You maintain the venue knowledge base. Report new venues you learn about —
+especially small ones — but do not limit your search to known venues.
 
 Respond with ONLY a JSON object, no prose, in exactly this shape:
 {
   "events": [
-    {"title": "...", "description": "one or two sentences", "date": "YYYY-MM-DD",
+    {"title": "...", "description": "one or two sentences; include cover/ticket price when known", "date": "YYYY-MM-DD",
      "time": "HH:MM", "venue": "...", "address": "...", "source_url": "https://..."}
   ],
   "venues": [
     {"name": "...", "notes": "what kind of events this place is known for"}
   ]
 }
-Rules: every event must be real and dated within the window. Include the
-Ticketmaster events you were given only if they are inside the window, and add
-distinct local events they miss. No duplicates — one entry per unique event.
-Aim for 5-12 events total. If you cannot verify anything, return empty arrays.`;
+Rules: every event must be real and dated within the window. The Ticketmaster
+list you are given skews to big stages — include the best few that fit the
+big-stage budget, and spend your searching on the small venues it misses.
+No duplicates — one entry per unique event. Aim for 6-14 events total.
+If you cannot verify anything, return empty arrays.`;
 
     const userText = `City: ${city}
 
@@ -258,7 +280,9 @@ ${JSON.stringify(ticketmasterEvents, null, 2)}`;
         // Sonnet handles this search-and-extract job as well as Opus at ~40%
         // less cost; swap back to claude-opus-4-8 if curation quality dips.
         model: 'claude-sonnet-4-6',
-        max_tokens: 8000,
+        // Thinking tokens count toward max_tokens; 8 search rounds plus the
+        // final JSON need headroom (8K truncated mid-run).
+        max_tokens: 16000,
         thinking: { type: 'adaptive' },
         // medium keeps the search loop tight — at the default (high) Sonnet
         // ran many more search/filter rounds than the function budget allows.
@@ -269,7 +293,9 @@ ${JSON.stringify(ticketmasterEvents, null, 2)}`;
         // minutes of extra rounds and produced unrecoverable container_id
         // 400s on pause_turn continuations. This one is plain search —
         // predictable latency, which a 300s serverless budget needs.
-        tools: [{ type: 'web_search_20250305', name: 'web_search', max_uses: 6 }],
+        // 8 searches: the small-venue strategy spends extra queries checking
+        // known venues' own calendars by name.
+        tools: [{ type: 'web_search_20250305', name: 'web_search', max_uses: 8 }],
         messages: [{ role: 'user', content: userText }],
     };
 
@@ -295,7 +321,12 @@ ${JSON.stringify(ticketmasterEvents, null, 2)}`;
         .filter(b => b.type === 'text')
         .map(b => b.text)
         .join('');
-    return parseAgentJson(text);
+    try {
+        return parseAgentJson(text);
+    } catch (err) {
+        // Surface why: a max_tokens stop means truncation, not a format slip.
+        throw new Error(`${err.message} (stop_reason=${response.stop_reason}, text_chars=${text.length})`);
+    }
 }
 
 function parseAgentJson(text) {
