@@ -108,6 +108,45 @@
         .section-label::before { content: '[ '; }
         .section-label::after  { content: ' ]'; }
 
+        /* Confirmation toast ("e-vites sent") — slides in over the top bar */
+        .flash-toast {
+            position: fixed;
+            top: 18px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 100;
+            background: #fff;
+            padding: 10px 40px 10px 18px;
+            max-width: min(520px, calc(100vw - 32px));
+            box-shadow: 4px 4px 0 rgba(0, 0, 0, 0.15);
+            animation: flash-in 0.25s ease;
+        }
+        .flash-toast > .corner { background: #fff; padding: 0 2px; }
+        .flash-toast.hide { opacity: 0; transition: opacity 0.3s ease; }
+        @keyframes flash-in {
+            from { transform: translate(-50%, -150%); }
+            to   { transform: translate(-50%, 0); }
+        }
+        .flash-text { font-weight: bold; color: #1d6b2e; }
+        .flash-detail {
+            margin-top: 6px;
+            font-size: 0.85em;
+            color: #555;
+        }
+        .flash-close {
+            position: absolute;
+            top: 4px;
+            right: 6px;
+            background: none;
+            border: none;
+            font-family: inherit;
+            font-size: 1.1em;
+            color: #111;
+            cursor: pointer;
+            padding: 2px 6px;
+        }
+        .flash-close:hover { background: #eee; }
+
         /* Date filter bar */
         .filter-row {
             display: flex;

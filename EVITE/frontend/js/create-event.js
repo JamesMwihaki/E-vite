@@ -282,8 +282,7 @@ async function handleCreateEvent() {
 
         // If no invitees selected, just confirm and leave.
         if (emails.length === 0 && friend_ids.length === 0) {
-            alert(`Event "${eventData.title}" created!`);
-            window.location.href = 'landing-page.html';
+            flashAndGoHome(`✓ "${eventData.title}" created`);
             return;
         }
 
@@ -300,18 +299,26 @@ async function handleCreateEvent() {
 
         const sentCount = inviteResult.created.length;
         const skippedCount = inviteResult.skipped.length;
-        let message = `Created event "${eventData.title}" and sent ${sentCount} evite${sentCount === 1 ? '' : 's'}.`;
+        const text = `✓ "${eventData.title}" created · ${sentCount} e-vite${sentCount === 1 ? '' : 's'} sent`;
+        let detail = null;
         if (skippedCount > 0) {
-            const lines = inviteResult.skipped.map(s => {
+            detail = `Skipped ${skippedCount}: ` + inviteResult.skipped.map(s => {
                 const target = s.email || `friend #${s.friend_id}`;
-                return `  - ${target} (${s.reason})`;
-            }).join('\n');
-            message += `\n\nSkipped ${skippedCount}:\n${lines}`;
+                return `${target} (${s.reason})`;
+            }).join(', ');
         }
-        alert(message);
-        window.location.href = 'landing-page.html';
+        flashAndGoHome(text, detail);
     } catch (error) {
         console.error('Create event failed:', error);
         showFormError(`Could not create event: ${error.message}`);
     }
+}
+
+// Confirmation shows as a toast on the home page (rendered by events-page.js)
+// instead of a blocking browser alert.
+function flashAndGoHome(text, detail) {
+    try {
+        sessionStorage.setItem('evite_flash', JSON.stringify({ text, detail: detail || null }));
+    } catch { /* storage unavailable — skip the toast, the redirect still confirms */ }
+    window.location.href = 'landing-page.html';
 }

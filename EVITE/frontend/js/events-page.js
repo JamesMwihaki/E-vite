@@ -18,8 +18,52 @@ const dateFilter = { from: null, to: null }; // YYYY-MM-DD strings
     if (logoutBtn) logoutBtn.addEventListener('click', logout);
 
     wireDateFilter();
+    showFlashIfAny();
     loadEvents();
 })();
+
+// One-shot confirmation toast (e.g. "e-vites sent") left by another page in
+// sessionStorage. ASCII-framed, slides in at the top, auto-dismisses.
+function showFlashIfAny() {
+    let flash = null;
+    try {
+        const raw = sessionStorage.getItem('evite_flash');
+        sessionStorage.removeItem('evite_flash'); // one-shot, even if malformed
+        flash = JSON.parse(raw);
+    } catch { return; }
+    if (!flash || !flash.text) return;
+
+    const toast = document.createElement('div');
+    toast.className = 'ascii-frame flash-toast';
+    toast.setAttribute('role', 'status');
+    toast.innerHTML = `
+        <span class="corner tl">+</span>
+        <span class="corner tr">+</span>
+        <span class="corner bl">+</span>
+        <span class="corner br">+</span>
+        <span class="flash-text"></span>
+        <div class="flash-detail hidden"></div>
+        <button type="button" class="flash-close" aria-label="Dismiss">×</button>
+    `;
+    toast.querySelector('.flash-text').textContent = flash.text;
+    if (flash.detail) {
+        const detailEl = toast.querySelector('.flash-detail');
+        detailEl.textContent = flash.detail;
+        detailEl.classList.remove('hidden');
+    }
+    document.body.appendChild(toast);
+
+    let dismissed = false;
+    const dismiss = () => {
+        if (dismissed) return;
+        dismissed = true;
+        toast.classList.add('hide');
+        setTimeout(() => toast.remove(), 350);
+    };
+    toast.querySelector('.flash-close').addEventListener('click', dismiss);
+    // Skipped-invite details deserve a longer read.
+    setTimeout(dismiss, flash.detail ? 12000 : 6000);
+}
 
 async function loadEvents() {
     try {
