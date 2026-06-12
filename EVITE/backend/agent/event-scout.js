@@ -205,7 +205,7 @@ async function fetchTicketmaster(coords, startDate, endDate) {
     }).filter(e => e.title && e.date);
 }
 
-async function askClaude(city, startDate, endDate, knownVenues, ticketmasterEvents) {
+async function askClaude(city, startDate, endDate, knownVenues, knownEvents, ticketmasterEvents) {
     const anthropic = getAnthropic();
     if (!anthropic) return { events: ticketmasterEvents, venues: [] };
 
@@ -241,28 +241,49 @@ ${knownVenues.length
     ? knownVenues.map(v => `- ${v.name}: ${v.notes || 'no notes'}`).join('\n')
     : '(none yet)'}
 
+Already in our database — do NOT include these again, even reworded:
+${knownEvents.length
+    ? knownEvents.map(e => `- ${e.title} (${e.date})`).join('\n')
+    : '(none yet)'}
+
 Ticketmaster already found these (verify, dedupe, and supplement):
 ${JSON.stringify(ticketmasterEvents, null, 2)}`;
 
     const params = {
-        model: 'claude-opus-4-8',
+        // Sonnet handles this search-and-extract job as well as Opus at ~40%
+        // less cost; swap back to claude-opus-4-8 if curation quality dips.
+        model: 'claude-sonnet-4-6',
         max_tokens: 8000,
         thinking: { type: 'adaptive' },
+        // medium keeps the search loop tight — at the default (high) Sonnet
+        // ran many more search/filter rounds than the function budget allows.
+        output_config: { effort: 'medium' },
         system,
-        tools: [{ type: 'web_search_20260209', name: 'web_search', max_uses: 6 }],
+        // The 20250305 tool version, deliberately: the newer 20260209 version
+        // runs dynamic-filtering code execution server-side, which added
+        // minutes of extra rounds and produced unrecoverable container_id
+        // 400s on pause_turn continuations. This one is plain search —
+        // predictable latency, which a 300s serverless budget needs.
+        tools: [{ type: 'web_search_20250305', name: 'web_search', max_uses: 6 }],
         messages: [{ role: 'user', content: userText }],
     };
 
-    let response = await anthropic.messages.create(params);
+    // Streamed so the connection stays active while server-side web search
+    // rounds run — a non-streaming call sits silent for minutes and trips
+    // request timeouts.
+    let response = await anthropic.messages.stream(params).finalMessage();
     // Server-side web search can pause its loop; re-send to let it resume.
+    // The web search tool's dynamic filtering runs code execution in a
+    // container — continuations must reference it or the API returns 400.
     for (let i = 0; i < 4 && response.stop_reason === 'pause_turn'; i++) {
-        response = await anthropic.messages.create({
+        response = await anthropic.messages.stream({
             ...params,
+            ...(response.container ? { container: response.container.id } : {}),
             messages: [
                 { role: 'user', content: userText },
                 { role: 'assistant', content: response.content },
             ],
-        });
+        }).finalMessage();
     }
 
     const text = response.content
@@ -293,8 +314,14 @@ async function getScoutUserId() {
     return res.rows[0].id;
 }
 
+// Punctuation and spacing are stripped so "Royals vs. Astros — Giveaway" and
+// "Royals vs Astros (Giveaway)" produce the same key.
+function normalizeKeyPart(s) {
+    return String(s).toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+}
+
 function externalKey(title, date, venue) {
-    return `${title}|${date}|${venue}`.toLowerCase().replace(/\s+/g, ' ').trim();
+    return [normalizeKeyPart(title), date, normalizeKeyPart(venue)].join('|');
 }
 
 async function saveEvents(city, events, startDate, endDate, scoutId, coords) {
@@ -359,8 +386,19 @@ async function runForCity(city, localDate) {
          ORDER BY last_seen DESC LIMIT 30`,
         [city]
     );
+    // Upcoming events from earlier runs, fed to the model as an exclusion
+    // list — the external_key catches exact re-discoveries, this catches
+    // rewordings of the same event.
+    const knownRes = await db.query(
+        `SELECT title, to_char(event_date, 'YYYY-MM-DD') AS date
+         FROM events
+         WHERE discovered AND LOWER(city) = LOWER($1) AND event_date >= $2
+         ORDER BY event_date LIMIT 60`,
+        [city, startDate]
+    );
 
-    const { events, venues } = await askClaude(city, startDate, endDate, venuesRes.rows, tmEvents);
+    const { events, venues } = await askClaude(
+        city, startDate, endDate, venuesRes.rows, knownRes.rows, tmEvents);
     const saved = await saveEvents(city, events, startDate, endDate, scoutId, coords);
     await saveVenues(city, venues);
 
@@ -426,26 +464,42 @@ async function runDueClusters({ force = false } = {}) {
     );
 
     const summary = { ran: [], skipped: [], errors: [] };
+    const due = [];
     for (const cluster of clusters.rows) {
         const { hour: localHour } = localClock(cluster.tz);
-
         if (!force && localHour < LOCAL_RUN_HOUR) {
             summary.skipped.push({ city: cluster.city, reason: `local time ${localHour}:00 < ${LOCAL_RUN_HOUR}:00` });
             continue;
         }
-        if (Date.now() - started > RUN_BUDGET_MS) {
-            summary.skipped.push({ city: cluster.city, reason: 'time budget — will retry next tick' });
+        due.push(cluster);
+    }
+
+    // Cities run in parallel batches — a single run can take ~4 minutes and
+    // the work is network-bound, so sequential processing would let only one
+    // city fit the function budget per invocation. Batches past the budget
+    // roll to the next tick (next day on a daily cron).
+    const CONCURRENCY = 3;
+    for (let i = 0; i < due.length; i += CONCURRENCY) {
+        const batch = due.slice(i, i + CONCURRENCY);
+        if (i > 0 && Date.now() - started > RUN_BUDGET_MS) {
+            for (const cluster of batch) {
+                summary.skipped.push({ city: cluster.city, reason: 'time budget — will retry next tick' });
+            }
             continue;
         }
-
-        const result = await runCityIfDue(cluster.city, cluster.tz, { force });
-        if (result.status === 'ran') {
-            summary.ran.push({ city: cluster.city, new_events: result.new_events });
-        } else if (result.status === 'skipped') {
-            summary.skipped.push({ city: cluster.city, reason: result.reason });
-        } else {
-            summary.errors.push({ city: cluster.city, error: result.error });
-        }
+        const results = await Promise.all(
+            batch.map((cluster) => runCityIfDue(cluster.city, cluster.tz, { force }))
+        );
+        results.forEach((result, j) => {
+            const city = batch[j].city;
+            if (result.status === 'ran') {
+                summary.ran.push({ city, new_events: result.new_events });
+            } else if (result.status === 'skipped') {
+                summary.skipped.push({ city, reason: result.reason });
+            } else {
+                summary.errors.push({ city, error: result.error });
+            }
+        });
     }
     return summary;
 }
