@@ -1,8 +1,31 @@
 const express = require('express');
 const logger = require('../utils/logger');
-const { runDueClusters } = require('../agent/event-scout');
+const { requireAuth } = require('../middleware/auth');
+const { runDueClusters, reverseGeocode } = require('../agent/event-scout');
 
 const router = express.Router();
+
+// Browser geolocation support: the profile page sends device coordinates and
+// gets back a "City, ST" string for the location field. Manual typing remains
+// the fallback when permission is denied or detection fails.
+router.get('/api/geo/locate', requireAuth, async (req, res) => {
+    const lat = Number(req.query.lat);
+    const lon = Number(req.query.lon);
+    if (!Number.isFinite(lat) || !Number.isFinite(lon)
+        || Math.abs(lat) > 90 || Math.abs(lon) > 180) {
+        return res.status(400).json({ message: 'lat and lon are required' });
+    }
+    try {
+        const place = await reverseGeocode(lat, lon);
+        if (!place) {
+            return res.status(404).json({ message: 'Could not determine a city from your location' });
+        }
+        res.json({ location: place });
+    } catch (error) {
+        logger.error(`Reverse geocode failed: ${error.message}`);
+        res.status(500).json({ message: 'Location lookup failed' });
+    }
+});
 
 // Vercel Cron sends "Authorization: Bearer <CRON_SECRET>" automatically when
 // the CRON_SECRET env var is set. Without the secret configured the endpoint

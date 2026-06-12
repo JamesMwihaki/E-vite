@@ -26,7 +26,10 @@ let anthropicClient;
 function getAnthropic() {
     if (anthropicClient !== undefined) return anthropicClient;
     try {
-        anthropicClient = process.env.ANTHROPIC_API_KEY ? new Anthropic() : null;
+        // 3-minute request timeout keeps a stuck call inside the run budget.
+        anthropicClient = process.env.ANTHROPIC_API_KEY
+            ? new Anthropic({ timeout: 180 * 1000 })
+            : null;
     } catch (err) {
         logger.warn(`Anthropic client unavailable: ${err.message}`);
         anthropicClient = null;
@@ -66,13 +69,38 @@ function plusDays(isoDate, days) {
 
 /* ---- discovery sources ---- */
 
+// All outbound lookups get hard timeouts — a hung fetch would otherwise stall
+// a background scout run forever (Nominatim throttles rapid requests).
+const FETCH_TIMEOUT_MS = 15 * 1000;
+
 async function geocode(city) {
     const url = `https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(city)}`;
-    const res = await fetch(url, { headers: { 'User-Agent': 'evite-event-scout/1.0' } });
+    const res = await fetch(url, {
+        headers: { 'User-Agent': 'evite-event-scout/1.0' },
+        signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+    });
     if (!res.ok) return null;
     const rows = await res.json();
     if (!rows.length) return null;
     return { lat: rows[0].lat, lon: rows[0].lon };
+}
+
+// Browser coordinates -> "City, ST" for the profile location field, so
+// device-detected and hand-typed locations land in the same format.
+async function reverseGeocode(lat, lon) {
+    const url = `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}&zoom=10`;
+    const res = await fetch(url, {
+        headers: { 'User-Agent': 'evite-event-scout/1.0' },
+        signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+    const a = data.address || {};
+    const city = a.city || a.town || a.village || a.municipality || a.county;
+    if (!city) return null;
+    const iso = a['ISO3166-2-lvl4']; // e.g. "US-TX"
+    const region = iso && iso.includes('-') ? iso.split('-')[1] : a.state;
+    return region ? `${city}, ${region}` : city;
 }
 
 async function fetchTicketmaster(coords, startDate, endDate) {
@@ -88,7 +116,9 @@ async function fetchTicketmaster(coords, startDate, endDate) {
         size: '25',
         sort: 'date,asc',
     });
-    const res = await fetch(`https://app.ticketmaster.com/discovery/v2/events.json?${params}`);
+    const res = await fetch(`https://app.ticketmaster.com/discovery/v2/events.json?${params}`, {
+        signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+    });
     if (!res.ok) {
         logger.warn(`Ticketmaster request failed: ${res.status}`);
         return [];
@@ -286,6 +316,36 @@ async function recordRun(city, runDate, status, eventsFound, detail) {
     );
 }
 
+// True when the city hasn't had a successful run on its current local date.
+async function isCityDue(city, timezone) {
+    const { date: localDate } = localClock(timezone);
+    const already = await db.query(
+        `SELECT 1 FROM agent_runs
+         WHERE LOWER(city) = LOWER($1) AND run_date = $2 AND status = 'ok'`,
+        [city, localDate]
+    );
+    return already.rows.length === 0;
+}
+
+// Run one city now unless it already ran today (`force` skips that gate).
+// Shared by the cron loop and the profile-change trigger; double-triggering
+// is harmless because saved events dedupe on external_key.
+async function runCityIfDue(city, timezone, { force = false } = {}) {
+    const { date: localDate } = localClock(timezone);
+    if (!force && !(await isCityDue(city, timezone))) {
+        return { status: 'skipped', reason: 'already ran today' };
+    }
+    try {
+        const saved = await runForCity(city, localDate);
+        await recordRun(city, localDate, 'ok', saved, null);
+        return { status: 'ran', new_events: saved };
+    } catch (err) {
+        logger.error(`Scout run failed for ${city}: ${err.message}`);
+        await recordRun(city, localDate, 'error', 0, err.message).catch(() => {});
+        return { status: 'error', error: err.message };
+    }
+}
+
 // Entry point for the cron. Groups users by city, figures out each cluster's
 // local time, and runs every cluster that is past 5 AM local and hasn't had a
 // successful run today. `force` ignores the clock (manual triggering); a
@@ -303,39 +363,27 @@ async function runDueClusters({ force = false } = {}) {
 
     const summary = { ran: [], skipped: [], errors: [] };
     for (const cluster of clusters.rows) {
-        const { date: localDate, hour: localHour } = localClock(cluster.tz);
+        const { hour: localHour } = localClock(cluster.tz);
 
-        if (!force) {
-            if (localHour < LOCAL_RUN_HOUR) {
-                summary.skipped.push({ city: cluster.city, reason: `local time ${localHour}:00 < ${LOCAL_RUN_HOUR}:00` });
-                continue;
-            }
-            const already = await db.query(
-                `SELECT 1 FROM agent_runs WHERE city = $1 AND run_date = $2 AND status = 'ok'`,
-                [cluster.city, localDate]
-            );
-            if (already.rows.length) {
-                summary.skipped.push({ city: cluster.city, reason: 'already ran today' });
-                continue;
-            }
+        if (!force && localHour < LOCAL_RUN_HOUR) {
+            summary.skipped.push({ city: cluster.city, reason: `local time ${localHour}:00 < ${LOCAL_RUN_HOUR}:00` });
+            continue;
         }
         if (Date.now() - started > RUN_BUDGET_MS) {
             summary.skipped.push({ city: cluster.city, reason: 'time budget — will retry next tick' });
             continue;
         }
 
-        try {
-            const saved = await runForCity(cluster.city, localDate);
-            await recordRun(cluster.city, localDate, 'ok', saved, null);
-            summary.ran.push({ city: cluster.city, new_events: saved });
-        } catch (err) {
-            logger.error(`Scout run failed for ${cluster.city}: ${err.message}`);
-            await recordRun(cluster.city, localDate, 'error', 0, err.message)
-                .catch(() => {});
-            summary.errors.push({ city: cluster.city, error: err.message });
+        const result = await runCityIfDue(cluster.city, cluster.tz, { force });
+        if (result.status === 'ran') {
+            summary.ran.push({ city: cluster.city, new_events: result.new_events });
+        } else if (result.status === 'skipped') {
+            summary.skipped.push({ city: cluster.city, reason: result.reason });
+        } else {
+            summary.errors.push({ city: cluster.city, error: result.error });
         }
     }
     return summary;
 }
 
-module.exports = { runDueClusters, runForCity };
+module.exports = { runDueClusters, runForCity, runCityIfDue, isCityDue, reverseGeocode };

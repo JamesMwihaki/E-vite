@@ -2,6 +2,12 @@ const express = require('express');
 const logger = require('../utils/logger');
 const db = require('../db/database');
 const { hashPassword, verifyPassword } = require('../utils/passwords');
+const { runCityIfDue, isCityDue } = require('../agent/event-scout');
+
+// On Vercel, work kicked off after the response needs waitUntil to keep the
+// function alive. Locally (plain node server) a floating promise is fine.
+let waitUntil = (promise) => { promise.catch(() => {}); };
+try { ({ waitUntil } = require('@vercel/functions')); } catch { /* local dev */ }
 
 const router = express.Router();
 
@@ -145,13 +151,18 @@ router.put('/api/me', async (req, res) => {
         return res.status(400).json({ message: 'Valid email is required' });
     }
     try {
+        const prev = await db.query(
+            'SELECT location, timezone FROM users WHERE id = $1',
+            [req.session.user_id]
+        );
+
         // location opts the user into nearby-event discovery; timezone comes
         // from the browser so the scout can run at 5 AM local time.
         const result = await db.query(
             `UPDATE users SET first_name = $1, last_name = $2, email = $3,
                               location = $4, timezone = COALESCE($5, timezone)
              WHERE id = $6
-             RETURNING id, username, email, first_name, last_name, location, created_at`,
+             RETURNING id, username, email, first_name, last_name, location, timezone, created_at`,
             [first_name || null, last_name || null, email,
              (location || '').trim() || null, (timezone || '').trim() || null,
              req.session.user_id]
@@ -160,7 +171,26 @@ router.put('/api/me', async (req, res) => {
             return res.status(404).json({ message: 'User not found' });
         }
         logger.info(`Profile updated for user_id=${req.session.user_id}`);
-        res.json({ user: result.rows[0] });
+
+        // A changed location kicks off the event scout for the new city right
+        // away (in the background) instead of waiting for the daily cron —
+        // unless that city was already scouted today.
+        const newLocation = result.rows[0].location;
+        const oldLocation = (prev.rows[0]?.location || '').trim().toLowerCase();
+        let scouting = false;
+        if (newLocation && newLocation.trim().toLowerCase() !== oldLocation) {
+            const tz = result.rows[0].timezone;
+            if (await isCityDue(newLocation, tz)) {
+                scouting = true;
+                waitUntil(
+                    runCityIfDue(newLocation, tz)
+                        .then((r) => logger.info(`Location-change scout for ${newLocation}: ${JSON.stringify(r)}`))
+                        .catch((err) => logger.error(`Location-change scout failed: ${err.message}`))
+                );
+            }
+        }
+
+        res.json({ user: result.rows[0], scouting });
     } catch (error) {
         if (error.code === PG_UNIQUE_VIOLATION) {
             return res.status(409).json({ message: 'Email already taken' });
