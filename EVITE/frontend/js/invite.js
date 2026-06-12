@@ -27,8 +27,14 @@ function showError(message) {
     el.textContent = message;
 }
 
-function render({ status, event, inviter }) {
+function render({ status, event, inviter, invitee_email }) {
     document.getElementById('loading-state').classList.add('hidden');
+
+    // Make signup seamless: carry the invited email into the signup form.
+    if (invitee_email) {
+        const signupLink = document.querySelector('.signup-nudge a');
+        if (signupLink) signupLink.href = `signup.html?email=${encodeURIComponent(invitee_email)}`;
+    }
     for (const id of ['invite-section', 'event-section', 'rsvp-section']) {
         document.getElementById(id).classList.remove('hidden');
     }

@@ -176,6 +176,10 @@ function buildEventCard(event, rsvpStatus) {
     card.dataset.eventId = event.id;
 
     const showRsvp = event.event_type === 'private';
+    // The person who email-invited the viewer can be added as a friend right
+    // from the card; once they're friends the offer disappears.
+    const showFriendBtn = event.inviter_id && !event.inviter_friend_status;
+    const showFriendPending = event.inviter_id && event.inviter_friend_status === 'pending';
     card.innerHTML = `
         <span class="corner tl">+</span>
         <span class="corner tr">+</span>
@@ -186,6 +190,12 @@ function buildEventCard(event, rsvpStatus) {
         <span class="field event-location"></span>
         <span class="field event-date"></span>
         <span class="field event-description"></span>
+        ${showFriendBtn ? `
+            <div class="friend-block">
+                <button type="button" class="rsvp-btn friend-btn"></button>
+            </div>
+        ` : ''}
+        ${showFriendPending ? '<span class="field friend-pending">[ FRIEND REQUEST PENDING ]</span>' : ''}
         ${showRsvp ? `
             <div class="rsvp-block">
                 <div class="rsvp-label">[ RSVP ]</div>
@@ -213,6 +223,13 @@ function buildEventCard(event, rsvpStatus) {
     card.querySelector('.event-location').textContent = `Location: ${event.location || ''}`;
     card.querySelector('.event-date').textContent = formatEventDate(event);
     card.querySelector('.event-description').textContent = `Description: ${event.description || ''}`;
+
+    if (showFriendBtn) {
+        const friendBtn = card.querySelector('.friend-btn');
+        const inviterName = event.inviter_first_name || event.inviter_username || 'inviter';
+        friendBtn.textContent = `[ + ADD ${inviterName.toUpperCase()} AS FRIEND ]`;
+        friendBtn.addEventListener('click', () => addInviterAsFriend(event, friendBtn));
+    }
 
     if (showRsvp) {
         const yesBtn = card.querySelector('.rsvp-yes');
@@ -254,6 +271,32 @@ async function sendRsvp(eventId, status, clickedBtn, otherBtn, statusEl) {
         // user clicked again and a newer state is in progress).
         if (statusEl.textContent === '✓ Sent') statusEl.textContent = settledLabel;
     }, 1500);
+}
+
+async function addInviterAsFriend(event, btn) {
+    btn.disabled = true;
+    try {
+        const response = await fetch('/api/friends/request', {
+            method: 'POST',
+            credentials: 'include',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ addressee_id: event.inviter_id }),
+        });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) {
+            btn.disabled = false;
+            alert(`Friend request failed: ${data.message || response.status}`);
+            return;
+        }
+        // If they had already requested us, the backend auto-accepts.
+        const nowFriends = data.friendship?.status === 'accepted'
+            || /already friends|accepted/i.test(data.message || '');
+        btn.textContent = nowFriends ? '[ ✓ FRIENDS ]' : '[ ✓ REQUEST SENT ]';
+    } catch (error) {
+        console.error('Friend request failed:', error);
+        btn.disabled = false;
+        alert('Could not send the friend request.');
+    }
 }
 
 async function saveRsvp(eventId, status) {

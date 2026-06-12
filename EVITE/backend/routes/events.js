@@ -87,10 +87,29 @@ router.get('/api/create_event', requireAuth, async (req, res) => {
     //     (no location set = no discovered events)
     //   - private events are visible only to the creator, to a directly-invited
     //     user (invitee_user_id), or to a user whose email matches an invitation
+    // inv/iu/fr: when the viewer was invited to an event by email, surface
+    // who invited them and the current friendship status, so the card can
+    // offer "add inviter as friend" until they're actually friends.
     const queryText = `
         SELECT e.id, e.title, e.description, e.event_date, e.event_time,
-               e.location, e.event_type, e.creator_id, e.discovered, e.source_url
+               e.location, e.event_type, e.creator_id, e.discovered, e.source_url,
+               inv.inviter AS inviter_id,
+               iu.username AS inviter_username,
+               iu.first_name AS inviter_first_name,
+               fr.status AS inviter_friend_status
         FROM events e
+        LEFT JOIN LATERAL (
+            SELECT i2.inviter
+            FROM invitations i2
+            WHERE i2.event_id = e.id
+              AND i2.invitee_email = (SELECT email FROM users WHERE id = $1)
+              AND i2.inviter <> $1
+            LIMIT 1
+        ) inv ON TRUE
+        LEFT JOIN users iu ON iu.id = inv.inviter
+        LEFT JOIN friendships fr
+            ON (fr.requester_id = $1 AND fr.addressee_id = inv.inviter)
+            OR (fr.addressee_id = $1 AND fr.requester_id = inv.inviter)
         WHERE (e.event_type = 'public'
                AND (e.discovered = FALSE
                     OR EXISTS (

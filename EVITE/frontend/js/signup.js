@@ -2,6 +2,12 @@ const SIGNUP_ENDPOINT = "/api/signup";
 
 const errorEl = document.getElementById('error');
 
+// Arriving from an email invitation ("Create an E-vite account" on the
+// invite page) prefills the invited address — signing up with it is what
+// links the invitation to the new account.
+const prefillEmail = new URLSearchParams(window.location.search).get('email');
+if (prefillEmail) document.getElementById('email').value = prefillEmail;
+
 document.getElementById('signup_btn').addEventListener('click', handleSignup);
 document.getElementById('password').addEventListener('keydown', (e) => {
     if (e.key === 'Enter') handleSignup();

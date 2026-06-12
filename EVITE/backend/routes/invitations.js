@@ -176,6 +176,8 @@ router.get('/api/invite/:token', async (req, res) => {
         const row = result.rows[0];
         res.json({
             status: row.status,
+            // Lets the invite page prefill signup with the invited address.
+            invitee_email: row.invitee_email,
             event: {
                 title: row.title,
                 description: row.description,
