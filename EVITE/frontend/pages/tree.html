@@ -344,11 +344,36 @@
         .nav-item:hover { background: #eee; }
         .nav-item.active:hover { background: #111; color: #fff; }
 
+        /* Phones: bigger tap targets; 16px inputs stop iOS zooming the page */
         @media (max-width: 480px) {
             body { padding: 12px; }
             .section { padding: 12px 14px; }
             .nav-bar { font-size: 13px; }
+            .nav-item { padding: 8px 10px; }
             .person-row { flex-wrap: wrap; }
+            input { font-size: 16px; }
+            .person-actions button { padding: 8px 12px; }
+            .tree-controls button { padding: 8px 12px; }
+            .tree-viewport { height: 360px; }
+        }
+
+        /* Wide screens: requests and search side by side, the tree gets the
+           full width and more height to roam. */
+        @media (min-width: 900px) {
+            .terminal { max-width: 1100px; }
+            .content {
+                display: grid;
+                grid-template-columns: 1fr 1fr;
+                align-content: start;
+            }
+            .content > .section { border-top: 1px dashed #111; }
+            .content > .section:first-child { border-top: none; }
+            .content > .section:nth-child(2) {
+                border-top: none;
+                border-left: 1px dashed #111;
+            }
+            .content > .section:nth-child(3) { grid-column: 1 / -1; }
+            .tree-viewport { height: 620px; }
         }
     </style>
 </head>

@@ -400,11 +400,39 @@
         .nav-item:hover { background: #eee; }
         .nav-item.active:hover { background: #111; color: #fff; }
 
+        /* Column wrappers are layout-invisible on mobile (sections stack and
+           keep their dividers); on wide screens they become two columns. */
+        .col { display: contents; }
+        .col-side > .section:first-child { border-top: 1px dashed #111; }
+        .col-main > .section:first-child { border-top: 1px dashed #111; }
+
+        /* Phones: bigger tap targets; 16px inputs stop iOS zooming the page */
         @media (max-width: 480px) {
             body { padding: 12px; }
             .section { padding: 12px 14px; }
             .row { flex-direction: column; gap: 0; }
             .nav-bar { font-size: 13px; }
+            .nav-item { padding: 8px 10px; }
+            .input-frame input, .input-frame textarea { font-size: 16px; }
+            .rsvp-btn { padding: 10px 16px; }
+            .person-remove { padding: 6px 10px; }
+            .chat-msg .chat-delete { padding: 4px 10px; }
+            .chat-compose .ascii-button { padding: 10px 14px; }
+            .chip-x { padding: 2px 6px; }
+        }
+
+        /* Wide screens: details + people on the left, chat + management on
+           the right. */
+        @media (min-width: 900px) {
+            .terminal { max-width: 1100px; }
+            .content { display: flex; align-items: stretch; flex-wrap: wrap; }
+            .col { display: block; flex: 1; min-width: 0; }
+            .col-main { border-right: 1px dashed #111; }
+            .col-main > .section:first-child,
+            .col-side > .section:first-child { border-top: none; }
+            .chat-messages { max-height: 480px; }
+            /* page-level states sit above the columns */
+            .content > .page-state { flex-basis: 100%; }
         }
     </style>
 </head>
@@ -426,6 +454,7 @@
         <div class="section page-state" id="loading-state">Loading event...</div>
         <div class="section page-state hidden" id="error-state"></div>
 
+        <div class="col col-main">
         <div class="section hidden" id="info-section">
             <div class="event-header">
                 <span class="event-title" id="event-title"></span>
@@ -474,7 +503,9 @@
             <div class="section-label">Invited</div>
             <div class="person-list" id="invited-list"></div>
         </div>
+        </div><!-- /.col-main -->
 
+        <div class="col col-side">
         <div class="section hidden" id="add-invite-section">
             <div class="section-label">Invite More People</div>
 
@@ -618,6 +649,7 @@
 
             <div class="message" id="manage-message"></div>
         </div>
+        </div><!-- /.col-side -->
 
         </main>
 

@@ -299,10 +299,47 @@
         .nav-item:hover { background: #eee; }
         .nav-item.active:hover { background: #111; color: #fff; }
 
+        /* Phones: bigger tap targets; 16px inputs stop iOS zooming the page */
         @media (max-width: 480px) {
             body { padding: 12px; }
             .section { padding: 12px 14px; }
             .nav-bar { font-size: 13px; }
+            .nav-item { padding: 8px 10px; }
+            input, textarea { font-size: 16px; }
+            .filter-dates input[type="date"] { font-size: 16px; flex: 1; min-width: 120px; }
+            .filter-btn { padding: 8px 6px; }
+            .rsvp-btn { padding: 10px 18px; }
+            .friend-block .rsvp-btn { padding: 10px 14px; }
+            .flash-close { padding: 8px 10px; }
+        }
+
+        /* Wide screens: exclusive and public side by side; a section whose
+           counterpart is empty (hidden) takes the full width with its cards
+           in two columns. */
+        @media (min-width: 900px) {
+            .terminal { max-width: 1100px; }
+            .content {
+                display: grid;
+                grid-template-columns: 1fr 1fr;
+                align-content: start;
+            }
+            .content > .section { border-top: 1px dashed #111; }
+            .section.welcome, .section.cta-section, #filter-section { grid-column: 1 / -1; }
+            .section.welcome { border-top: none; }
+            #exclusive-section { border-right: 1px dashed #111; }
+            #exclusive-section:has(+ #public-section.hidden) {
+                grid-column: 1 / -1;
+                border-right: none;
+            }
+            #exclusive-section.hidden + #public-section { grid-column: 1 / -1; }
+            .event-list.scrollable { max-height: 560px; }
+            #exclusive-section:has(+ #public-section.hidden) .event-list,
+            #exclusive-section.hidden + #public-section .event-list {
+                display: grid;
+                grid-template-columns: 1fr 1fr;
+                align-items: start;
+            }
+            .filter-row { gap: 14px; }
         }
     </style>
 </head>
@@ -323,7 +360,7 @@
             <span id="welcome-text"></span>
         </div>
 
-        <div class="section">
+        <div class="section cta-section">
             <a href="../pages/create-event.html" class="ascii-frame cta-button clickable">
                 <span class="corner tl">+</span>
                 <span class="corner tr">+</span>

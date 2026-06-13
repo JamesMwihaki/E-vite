@@ -212,12 +212,22 @@
         .nav-item:hover { background: #eee; }
         .nav-item.active:hover { background: #111; color: #fff; }
 
+        /* Phones: bigger tap targets; 16px inputs stop iOS zooming the page */
         @media (max-width: 480px) {
             body { padding: 12px; }
             .section { padding: 12px 14px; }
             .row { flex-direction: column; gap: 0; }
             .stats-grid { grid-template-columns: 1fr; }
             .nav-bar { font-size: 13px; }
+            .nav-item { padding: 8px 10px; }
+            .input-frame input { font-size: 16px; }
+            .ascii-button { padding: 12px 20px; }
+            .suggest-item { padding: 10px 12px; }
+        }
+
+        /* Wide screens: a touch more room for the form */
+        @media (min-width: 900px) {
+            .terminal { max-width: 660px; }
         }
     </style>
 </head>
