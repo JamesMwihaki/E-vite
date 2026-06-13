@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <title>My E-vites · E-vite</title>
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -178,14 +178,90 @@
         .nav-item:hover { background: #eee; }
         .nav-item.active:hover { background: #111; color: #fff; }
 
-        /* Phones: bigger tap targets; 16px inputs stop iOS zooming the page */
+        /* Desktop nav shows the classic [LABEL]; the glyph keycap is phone-only. */
+        .nav-item .key-cap { display: none; }
+        .nav-item .key-label::before { content: '['; }
+        .nav-item .key-label::after  { content: ']'; }
+
+        @keyframes blink {
+            0%, 49%   { opacity: 1; }
+            50%, 100% { opacity: 0; }
+        }
+
+        /* Phones: the pocket terminal — fullscreen session, shell-prompt
+           topbar with a blinking cursor, `#` comment headings, keycap nav. */
         @media (max-width: 480px) {
-            body { padding: 12px; }
+            body { padding: 0; -webkit-tap-highlight-color: transparent; }
+            .terminal { max-width: none; border: none; box-shadow: none; }
+            .terminal.ascii-frame > .corner { display: none; }
             .section { padding: 12px 14px; }
-            .nav-bar { font-size: 13px; }
-            .nav-item { padding: 8px 10px; }
             input, textarea { font-size: 16px; }
-            .rsvp-btn { padding: 10px 18px; }
+
+            /* Topbar title reads as a shell prompt */
+            .topbar .title { text-transform: lowercase; }
+            .topbar .title::before { content: '$ '; color: #888; }
+            .topbar .title::after {
+                content: '█';
+                margin-left: 2px;
+                animation: blink 1.2s steps(1) infinite;
+            }
+
+            /* Section labels read as shell comments */
+            .section-label {
+                text-align: left;
+                border-bottom: 1px dashed #111;
+                padding-bottom: 6px;
+            }
+            .section-label::before { content: '# '; color: #888; }
+            .section-label::after  { content: ''; }
+
+            /* Cards flash inverted on touch, like selected terminal text */
+            .event-card:active,
+            .event-card:active > .corner { background: #111; color: #fff; }
+
+            /* Keycap nav: glyph over label, hard shadow that compresses
+               when pressed; the active page's key sits half-depressed. */
+            .nav-bar {
+                gap: 10px;
+                padding: 10px 12px calc(10px + env(safe-area-inset-bottom));
+            }
+            .nav-item {
+                flex: 1;
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                gap: 4px;
+                padding: 9px 2px 8px;
+                border: 1px solid #111;
+                background: #fff;
+                box-shadow: 0 3px 0 #111;
+            }
+            .nav-item:hover { background: #fff; }
+            .nav-item:active { transform: translateY(3px); box-shadow: none; }
+            .nav-item .key-cap {
+                display: block;
+                font-size: 19px;
+                font-weight: bold;
+                line-height: 1;
+            }
+            .nav-item .key-label {
+                font-size: 8px;
+                letter-spacing: 0.5px;
+                white-space: nowrap;
+            }
+            .nav-item .key-label::before,
+            .nav-item .key-label::after { content: ''; }
+            .nav-item.active {
+                background: #111;
+                color: #fff;
+                transform: translateY(2px);
+                box-shadow: 0 1px 0 #111;
+            }
+            .nav-item.active:hover { background: #111; }
+
+            .rsvp-btn { padding: 10px 18px; box-shadow: 0 2px 0 currentColor; }
+            .rsvp-btn:active { transform: translateY(2px); box-shadow: none; }
+            .rsvp-btn.selected { box-shadow: none; }
         }
 
         /* Wide screens: cards in two columns */
@@ -220,10 +296,10 @@
         </main>
 
         <div class="section nav-bar">
-            <a href="landing-page.html" class="nav-item">[HOME]</a>
-            <a href="my-evites.html" class="nav-item active">[MY E-VITES]</a>
-            <a href="tree.html" class="nav-item">[MY TREE]</a>
-            <a href="profile.html" class="nav-item">[PROFILE]</a>
+            <a href="landing-page.html" class="nav-item"><span class="key-cap">~</span><span class="key-label">HOME</span></a>
+            <a href="my-evites.html" class="nav-item active"><span class="key-cap">&#9993;&#xFE0E;</span><span class="key-label">MY E-VITES</span></a>
+            <a href="tree.html" class="nav-item"><span class="key-cap">&Psi;</span><span class="key-label">MY TREE</span></a>
+            <a href="profile.html" class="nav-item"><span class="key-cap">@</span><span class="key-label">PROFILE</span></a>
         </div>
     </div>
 
