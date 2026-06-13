@@ -502,9 +502,12 @@ async function runSearch() {
         const response = await fetch(`${SEARCH_URL}?q=${encodeURIComponent(q)}`, { credentials: 'include' });
         if (mySeq !== searchSeq) return;
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
-        const results = await response.json();
+        // This search is for growing the tree — people already on it are
+        // noise here. Pending requests stay (they're actionable).
+        const results = (await response.json())
+            .filter(p => p.friendship_status !== 'accepted');
         if (results.length === 0) {
-            searchResultsEl.appendChild(emptyState('No matches'));
+            searchResultsEl.appendChild(emptyState('No matches outside your tree'));
             return;
         }
         for (const person of results) {
@@ -517,9 +520,8 @@ async function runSearch() {
 }
 
 function searchResultRow(person) {
-    const status = person.friendship_status;
+    const status = person.friendship_status; // 'accepted' filtered out upstream
     if (!status) return personRow(person, ['add']);
-    if (status === 'accepted') return personRow(person, ['friends-label']);
     if (person.i_am_requester) return personRow(person, ['sent-label']);
     return personRow(person, ['accept', 'decline']);
 }
