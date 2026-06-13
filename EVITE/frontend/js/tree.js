@@ -38,6 +38,7 @@ const TRANSITION_MS = 350;
 
     document.getElementById('logout-btn').addEventListener('click', logout);
     searchInputEl.addEventListener('keydown', onSearchKey);
+    searchInputEl.addEventListener('input', onSearchInput);
     setupViewportInteraction();
 
     // Delegate node clicks so reused elements pick up the current slot data
@@ -467,8 +468,26 @@ async function loadRequests() {
     }
 }
 
+// Results populate live while typing (debounced, ≥2 chars), same feel as the
+// invite pickers; Enter still searches immediately.
+let searchDebounce = null;
+
+function onSearchInput() {
+    clearTimeout(searchDebounce);
+    const q = searchInputEl.value.trim();
+    if (!q) {
+        searchResultsEl.textContent = '';
+        return;
+    }
+    if (q.length < 2) return;
+    searchDebounce = setTimeout(runSearch, 300);
+}
+
 function onSearchKey(e) {
-    if (e.key === 'Enter') runSearch();
+    if (e.key === 'Enter') {
+        clearTimeout(searchDebounce);
+        runSearch();
+    }
 }
 
 let searchSeq = 0;
