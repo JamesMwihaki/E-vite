@@ -1,16 +1,22 @@
 const createEventEndpoint = "/api/create_event";
 const invitationsEndpoint = "/api/invitations";
-const friendsEndpoint = "/api/friends";
 
-const friendsListEl = document.getElementById('friends-list');
-const selectedChipsEl = document.getElementById('selected-chips');
-const friendSearchEl = document.getElementById('friend-search');
 const pickerMetaEl = document.getElementById('picker-meta');
 
-// Map<friend_id, friend_obj> — selected friends keyed by id.
-const selectedFriends = new Map();
-// All friends, in render order. Each entry: { friend, rowEl, searchHay }
-const friendEntries = [];
+// Unified add-people field (shared invite-picker component): platform users
+// arrive as chips via name/@username suggestions, emails as email chips.
+const invitePicker = createInvitePicker({
+    inputEl: document.getElementById('invite-input'),
+    chipsEl: document.getElementById('invite-chips'),
+    suggestEl: document.getElementById('invite-suggest'),
+    onChange: () => {
+        const { users, emails } = invitePicker.counts();
+        const parts = [];
+        if (users) parts.push(`${users} on E-vite`);
+        if (emails) parts.push(`${emails} by email`);
+        pickerMetaEl.textContent = parts.join(' · ');
+    },
+});
 
 // When arriving via "create exclusive e-vite from this" on a public event,
 // ?from=<id> pre-fills the form. Only set once the source is fetched and
@@ -24,7 +30,6 @@ let sourceEventId = null;
     const logoutBtn = document.getElementById('logout-btn');
     if (logoutBtn) logoutBtn.addEventListener('click', logout);
 
-    loadFriends();
     setupDateTimeGuards();
 
     const fromParam = Number(new URLSearchParams(window.location.search).get('from'));
@@ -96,134 +101,6 @@ async function prefillFromSource(fromId) {
 
 document.getElementById('create_event').addEventListener('click', handleCreateEvent);
 
-async function loadFriends() {
-    friendsListEl.textContent = '';
-    friendEntries.length = 0;
-    selectedFriends.clear();
-
-    try {
-        const response = await fetch(friendsEndpoint, { credentials: 'include' });
-        if (!response.ok) throw new Error(`HTTP ${response.status}`);
-        const friends = await response.json();
-
-        if (friends.length === 0) {
-            const empty = document.createElement('div');
-            empty.className = 'friends-empty';
-            empty.innerHTML = 'No friends yet — <a href="tree.html">add some on your Tree</a>.';
-            friendsListEl.appendChild(empty);
-            friendSearchEl.style.display = 'none';
-            updatePickerMeta();
-            return;
-        }
-
-        for (const friend of friends) {
-            const fullName = [friend.first_name, friend.last_name].filter(Boolean).join(' ') || friend.username;
-            const rowEl = buildFriendRow(friend, fullName);
-            friendEntries.push({
-                friend,
-                rowEl,
-                searchHay: `${fullName} ${friend.username} ${friend.email || ''}`.toLowerCase(),
-            });
-            friendsListEl.appendChild(rowEl);
-        }
-
-        friendSearchEl.addEventListener('input', applyFilter);
-        updatePickerMeta();
-    } catch (error) {
-        console.error('Friends load failed:', error);
-        const errBox = document.createElement('div');
-        errBox.className = 'friends-empty';
-        errBox.textContent = 'Could not load your friends list';
-        friendsListEl.appendChild(errBox);
-    }
-}
-
-function buildFriendRow(friend, fullName) {
-    const row = document.createElement('div');
-    row.className = 'friend-row';
-    row.dataset.friendId = friend.id;
-
-    const name = document.createElement('span');
-    name.className = 'friend-name';
-    name.textContent = fullName;
-
-    const handle = document.createElement('span');
-    handle.className = 'friend-handle';
-    handle.textContent = `@${friend.username}`;
-
-    row.appendChild(name);
-    row.appendChild(handle);
-
-    row.addEventListener('click', () => toggleFriend(friend, fullName));
-    return row;
-}
-
-function toggleFriend(friend, fullName) {
-    if (selectedFriends.has(friend.id)) {
-        selectedFriends.delete(friend.id);
-    } else {
-        selectedFriends.set(friend.id, { ...friend, _fullName: fullName });
-    }
-    syncSelectionUI();
-}
-
-function syncSelectionUI() {
-    // Sync row styling
-    for (const entry of friendEntries) {
-        entry.rowEl.classList.toggle('selected', selectedFriends.has(entry.friend.id));
-    }
-    // Render chips
-    selectedChipsEl.textContent = '';
-    for (const friend of selectedFriends.values()) {
-        selectedChipsEl.appendChild(buildChip(friend));
-    }
-    updatePickerMeta();
-}
-
-function buildChip(friend) {
-    const chip = document.createElement('span');
-    chip.className = 'chip';
-    const label = document.createElement('span');
-    label.textContent = `@${friend.username}`;
-    const close = document.createElement('span');
-    close.className = 'chip-close';
-    close.textContent = '×';
-    close.title = 'Remove';
-    close.addEventListener('click', () => {
-        selectedFriends.delete(friend.id);
-        syncSelectionUI();
-    });
-    chip.appendChild(label);
-    chip.appendChild(close);
-    return chip;
-}
-
-function applyFilter() {
-    const needle = friendSearchEl.value.trim().toLowerCase();
-    let visible = 0;
-    for (const entry of friendEntries) {
-        const match = !needle || entry.searchHay.includes(needle);
-        entry.rowEl.classList.toggle('hidden', !match);
-        if (match) visible++;
-    }
-    // Remove any prior "no matches" element and re-add if needed
-    const prior = friendsListEl.querySelector('.friends-empty.search-empty');
-    if (prior) prior.remove();
-    if (visible === 0 && friendEntries.length > 0) {
-        const empty = document.createElement('div');
-        empty.className = 'friends-empty search-empty';
-        empty.textContent = 'No matches';
-        friendsListEl.appendChild(empty);
-    }
-}
-
-function updatePickerMeta() {
-    if (!pickerMetaEl) return;
-    const total = friendEntries.length;
-    const selected = selectedFriends.size;
-    pickerMetaEl.textContent = total === 0 ? '' : `${selected} of ${total} selected`;
-}
-
 function readEventData() {
     const checkedType = document.querySelector('input[name="eventType"]:checked');
     return {
@@ -235,15 +112,6 @@ function readEventData() {
         type: checkedType ? checkedType.value : 'public',
         source_event_id: sourceEventId,
     };
-}
-
-function readGuestEmails() {
-    const text = document.getElementById('guest_emails').value || '';
-    return text.split(',').map(e => e.trim()).filter(Boolean);
-}
-
-function readSelectedFriendIds() {
-    return [...selectedFriends.keys()];
 }
 
 async function createEvent(eventData) {
@@ -262,8 +130,8 @@ async function createEvent(eventData) {
 
 async function handleCreateEvent() {
     const eventData = readEventData();
-    const emails = readGuestEmails();
-    const friend_ids = readSelectedFriendIds();
+    const emails = invitePicker.getEmails();
+    const friend_ids = invitePicker.getFriendIds();
 
     showFormError('');
     if (!eventData.title.trim() || !eventData.date || !eventData.time) {
