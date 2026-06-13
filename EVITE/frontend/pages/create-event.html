@@ -214,11 +214,35 @@
         .nav-item:hover { background: #eee; }
         .nav-item.active:hover { background: #111; color: #fff; }
 
+        /* Phones: bigger tap targets; 16px inputs stop iOS zooming the page */
         @media (max-width: 480px) {
             body { padding: 12px; }
             .section { padding: 12px 14px; }
             .row { flex-direction: column; gap: 0; }
             .nav-bar { font-size: 13px; }
+            .nav-item { padding: 8px 10px; }
+            .input-frame input, .input-frame textarea { font-size: 16px; }
+            .ascii-button { padding: 12px 20px; }
+            .invite-chip { padding: 6px 10px; }
+            .chip-x { padding: 2px 6px; }
+        }
+
+        /* Wide screens: event details on the left, guest list on the right,
+           the create button spanning underneath. */
+        @media (min-width: 900px) {
+            .terminal { max-width: 1000px; }
+            .content {
+                display: grid;
+                grid-template-columns: 1.1fr 0.9fr;
+                align-content: start;
+            }
+            .content > .section { border-top: 1px dashed #111; }
+            .content > .section:first-child { border-top: none; }
+            .content > .section:nth-child(2) {
+                border-top: none;
+                border-left: 1px dashed #111;
+            }
+            .content > .section:last-child { grid-column: 1 / -1; }
         }
     </style>
 </head>

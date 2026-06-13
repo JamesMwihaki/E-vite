@@ -348,33 +348,85 @@ function setupViewportInteraction() {
     let startX = 0, startY = 0;
     let startPanX = 0, startPanY = 0;
 
+    // Touch support: active pointers tracked by id; one finger pans (same
+    // path as mouse drag), two fingers pinch-zoom around their midpoint.
+    const pointers = new Map();
+    let pinchStartDist = 0;
+    let pinchStartZoom = 1;
+    let pinchLastMid = null;
+
+    const pinchDist = () => {
+        const [a, b] = [...pointers.values()];
+        return Math.hypot(a.x - b.x, a.y - b.y) || 1;
+    };
+    const pinchMid = () => {
+        const [a, b] = [...pointers.values()];
+        return { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+    };
+    const beginDragFrom = (x, y) => {
+        dragging = true;
+        viewportEl.classList.add('dragging');
+        startX = x;
+        startY = y;
+        startPanX = panX;
+        startPanY = panY;
+    };
+
     viewportEl.addEventListener('pointerdown', (e) => {
         if (e.target.closest('.graph-node')) return;
         if (e.target.closest('.tree-controls')) return;
-        dragging = true;
-        viewportEl.classList.add('dragging');
-        startX = e.clientX;
-        startY = e.clientY;
-        startPanX = panX;
-        startPanY = panY;
-        viewportEl.setPointerCapture(e.pointerId);
+        pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+        try { viewportEl.setPointerCapture(e.pointerId); } catch (_) {}
+        if (pointers.size === 2) {
+            dragging = false; // pinch takes over from single-finger pan
+            pinchStartDist = pinchDist();
+            pinchStartZoom = zoom;
+            pinchLastMid = pinchMid();
+            viewportEl.classList.add('dragging');
+        } else if (pointers.size === 1) {
+            beginDragFrom(e.clientX, e.clientY);
+        }
     });
 
     viewportEl.addEventListener('pointermove', (e) => {
-        if (!dragging) return;
+        if (pointers.has(e.pointerId)) {
+            pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+        }
         const rect = viewportEl.getBoundingClientRect();
         const ratioX = 400 / rect.width;
         const ratioY = 500 / rect.height;
+
+        if (pointers.size === 2) {
+            // Fingers moving together pan; spreading/closing zooms at the
+            // midpoint. Both per-frame, so the gesture feels continuous.
+            const mid = pinchMid();
+            panX += (mid.x - pinchLastMid.x) * ratioX;
+            panY += (mid.y - pinchLastMid.y) * ratioY;
+            pinchLastMid = mid;
+            const newZoom = clamp(
+                pinchStartZoom * (pinchDist() / pinchStartDist), MIN_ZOOM, MAX_ZOOM);
+            zoomAt(newZoom, mid.x, mid.y); // calls applyTransform
+            return;
+        }
+        if (!dragging) return;
         panX = startPanX + (e.clientX - startX) * ratioX;
         panY = startPanY + (e.clientY - startY) * ratioY;
         applyTransform();
     });
 
     const endDrag = (e) => {
-        dragging = false;
-        viewportEl.classList.remove('dragging');
         if (e.pointerId !== undefined) {
+            pointers.delete(e.pointerId);
             try { viewportEl.releasePointerCapture(e.pointerId); } catch (_) {}
+        }
+        if (pointers.size === 1) {
+            // Pinch ended with one finger still down — hand off to panning
+            // from that finger's position so the view doesn't jump.
+            const [p] = pointers.values();
+            beginDragFrom(p.x, p.y);
+        } else if (pointers.size === 0) {
+            dragging = false;
+            viewportEl.classList.remove('dragging');
         }
     };
     viewportEl.addEventListener('pointerup', endDrag);
