@@ -215,6 +215,40 @@
             padding: 8px 4px;
         }
 
+        /* Friend picker inside "Invite More People" */
+        .invite-friends-list {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            max-height: 170px;
+            overflow-y: auto;
+            margin-bottom: 6px;
+        }
+        .invite-friends-list::-webkit-scrollbar { width: 6px; }
+        .invite-friends-list::-webkit-scrollbar-thumb { background: #111; }
+        .invite-friend-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 10px;
+            padding: 4px 8px;
+            border: 1px dashed transparent;
+            cursor: pointer;
+        }
+        .invite-friend-row:hover { background: #f5f5f5; }
+        .invite-friend-row.selected {
+            background: #111;
+            color: #fff;
+        }
+        .invite-friend-row.selected .person-sub { color: #ccc; }
+        .invite-friends-meta {
+            text-align: center;
+            font-size: 0.85em;
+            color: #777;
+            margin-bottom: 8px;
+            min-height: 1em;
+        }
+
         /* "Add inviter as friend" for email-invited viewers */
         .friend-offer { margin-top: 8px; }
         .friend-offer .rsvp-btn:disabled { cursor: default; opacity: 0.8; }
@@ -425,6 +459,8 @@
 
         <div class="section hidden" id="add-invite-section">
             <div class="section-label">Invite More People</div>
+
+            <label class="field-label" for="add-invite-emails">By email</label>
             <div class="ascii-frame input-frame">
                 <span class="corner tl">+</span>
                 <span class="corner tr">+</span>
@@ -432,6 +468,18 @@
                 <span class="corner br">+</span>
                 <input type="text" id="add-invite-emails" placeholder="email@one.com, email@two.com">
             </div>
+
+            <label class="field-label" for="add-invite-friend-search">Or pick friends on E-vite</label>
+            <div class="ascii-frame input-frame">
+                <span class="corner tl">+</span>
+                <span class="corner tr">+</span>
+                <span class="corner bl">+</span>
+                <span class="corner br">+</span>
+                <input type="text" id="add-invite-friend-search" placeholder="Search friends…">
+            </div>
+            <div class="invite-friends-list" id="add-invite-friends"></div>
+            <div class="invite-friends-meta" id="add-invite-meta"></div>
+
             <div class="button-row">
                 <button type="button" class="ascii-frame ascii-button" id="add-invite-btn">
                     <span class="corner tl">+</span>

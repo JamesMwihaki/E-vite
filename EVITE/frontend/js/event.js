@@ -130,8 +130,12 @@ function render(data) {
         document.getElementById('manage-section').classList.remove('hidden');
         document.getElementById('add-invite-section').classList.remove('hidden');
         renderInvited(invitations);
+        // Friends already on the invite list shouldn't be offered again.
+        invitedUserIds = new Set((invitations || [])
+            .map(i => i.invitee_user_id).filter(Boolean));
         wireManage();
         wireAddInvites();
+        renderInviteFriends();
     }
 
     initChat();
@@ -240,8 +244,13 @@ function renderInvited(invitations) {
 }
 
 /* ---- Creator: invite more people after the fact ---- */
+// Two paths, same as the create page: comma-separated emails, and a picker
+// of platform friends who aren't already on the invite list.
 
 let addInvitesWired = false;
+let invitedUserIds = new Set();
+let inviteFriends = null; // null until loaded
+const inviteSelected = new Set();
 
 function wireAddInvites() {
     if (addInvitesWired) return;
@@ -250,11 +259,16 @@ function wireAddInvites() {
     const input = document.getElementById('add-invite-emails');
     const btn = document.getElementById('add-invite-btn');
     const message = document.getElementById('add-invite-message');
+    const search = document.getElementById('add-invite-friend-search');
+
+    loadInviteFriends();
+    search.addEventListener('input', renderInviteFriends);
 
     const send = async () => {
         const emails = (input.value || '').split(',').map(e => e.trim()).filter(Boolean);
-        if (emails.length === 0) {
-            message.textContent = 'Enter at least one email address.';
+        const friend_ids = [...inviteSelected];
+        if (emails.length === 0 && friend_ids.length === 0) {
+            message.textContent = 'Enter an email or pick a friend.';
             message.className = 'message error';
             return;
         }
@@ -266,7 +280,7 @@ function wireAddInvites() {
                 method: 'POST',
                 credentials: 'include',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ event_id: eventId, emails }),
+                body: JSON.stringify({ event_id: eventId, emails, friend_ids }),
             });
             const data = await res.json().catch(() => ({}));
             btn.disabled = false;
@@ -283,7 +297,8 @@ function wireAddInvites() {
             message.textContent = text;
             message.className = 'message success';
             input.value = '';
-            loadEvent();
+            inviteSelected.clear();
+            loadEvent(); // refreshes invited list + filters the friend picker
         } catch (error) {
             console.error('Add invites failed:', error);
             btn.disabled = false;
@@ -294,6 +309,69 @@ function wireAddInvites() {
 
     btn.addEventListener('click', send);
     input.addEventListener('keydown', (e) => { if (e.key === 'Enter') send(); });
+}
+
+async function loadInviteFriends() {
+    try {
+        const res = await fetch('/api/friends', { credentials: 'include' });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        inviteFriends = await res.json();
+    } catch (error) {
+        console.error('Friends load failed:', error);
+        inviteFriends = [];
+    }
+    renderInviteFriends();
+}
+
+function renderInviteFriends() {
+    const list = document.getElementById('add-invite-friends');
+    const meta = document.getElementById('add-invite-meta');
+    if (!list || inviteFriends === null) return;
+    list.innerHTML = '';
+
+    const needle = (document.getElementById('add-invite-friend-search').value || '')
+        .trim().toLowerCase();
+    // Drop friends who are already invited (selection follows along).
+    for (const id of [...inviteSelected]) {
+        if (invitedUserIds.has(id)) inviteSelected.delete(id);
+    }
+    const candidates = inviteFriends.filter((f) => {
+        if (invitedUserIds.has(f.id)) return false;
+        if (!needle) return true;
+        const hay = `${f.first_name || ''} ${f.last_name || ''} ${f.username}`.toLowerCase();
+        return hay.includes(needle);
+    });
+
+    if (candidates.length === 0) {
+        const empty = document.createElement('div');
+        empty.className = 'empty-state';
+        empty.textContent = inviteFriends.length === 0
+            ? 'No friends yet — add some on your Tree.'
+            : (needle ? 'No matches' : 'All your friends are already invited.');
+        list.appendChild(empty);
+        meta.textContent = '';
+        return;
+    }
+
+    for (const friend of candidates) {
+        const row = document.createElement('div');
+        row.className = 'invite-friend-row' + (inviteSelected.has(friend.id) ? ' selected' : '');
+        const name = document.createElement('span');
+        name.className = 'person-name';
+        name.textContent = displayName(friend);
+        const sub = document.createElement('span');
+        sub.className = 'person-sub';
+        sub.textContent = `@${friend.username}`;
+        row.appendChild(name);
+        row.appendChild(sub);
+        row.addEventListener('click', () => {
+            if (inviteSelected.has(friend.id)) inviteSelected.delete(friend.id);
+            else inviteSelected.add(friend.id);
+            renderInviteFriends();
+        });
+        list.appendChild(row);
+    }
+    meta.textContent = inviteSelected.size ? `${inviteSelected.size} selected` : '';
 }
 
 function personRow(name, sub, statusText, statusClass) {
