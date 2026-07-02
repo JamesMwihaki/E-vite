@@ -298,12 +298,27 @@
             .suggest-item { padding: 10px 12px; }
         }
 
-        /* Wide screens: a touch more room for the form */
+        /* Wide screens: same app window as everywhere else. Identity, stats,
+           and password live on a left rail; Edit Profile takes the right
+           column at full height. */
         @media (min-width: 900px) {
-            .terminal { max-width: 660px; }
+            .terminal { max-width: 1100px; }
+            .content {
+                display: grid;
+                grid-template-columns: 0.9fr 1.1fr;
+                align-content: start;
+            }
+            .content > .section { border-top: 1px dashed #111; }
+            .content > .section:first-child { border-top: none; }
+            .content > .section:nth-child(3) {
+                grid-column: 2;
+                grid-row: 1 / span 3;
+                border-top: none;
+                border-left: 1px dashed #111;
+            }
         }
     </style>
-    <link rel="stylesheet" href="../css/affordances.css">
+    <link rel="stylesheet" href="../css/affordances.css?v=2">
 </head>
 <body>
     <div class="terminal ascii-frame">

@@ -31,6 +31,14 @@ button,
 button { cursor: pointer; }
 button:disabled { cursor: not-allowed; }
 
+/* Nav bar, called out explicitly: the item and its label both carry the
+   weight, so no page-level rule or inherited style can thin them out. */
+.nav-bar .nav-item,
+.nav-item .key-label,
+.topbar .brand {
+    font-weight: bold;
+}
+
 /* The secondary line inside an invite suggestion stays normal weight so the
    row is still scannable — the bold name is the pressable handle. */
 .suggest-item .sub { font-weight: normal; }
@@ -43,6 +51,19 @@ button:disabled { cursor: not-allowed; }
 /* ---------------------------------------------------------------------------
    INPUTS — a `>` prompt marks every field; focus lights it up.
    --------------------------------------------------------------------------- */
+
+/* Keep an input frame's bottom margin inside its .row column: as a plain
+   block the margin collapses through the wrapper, letting the next label
+   ride up onto the frame's corner glyphs. */
+.row > .field-group {
+    display: flex;
+    flex-direction: column;
+}
+
+/* Some pages zero `.input-frame:last-child` for frames that end a section,
+   which also catches frames inside a field-group (always its last child) and
+   deletes the gap under the row. Put the form rhythm back. */
+.row > .field-group > .input-frame:last-child { margin-bottom: 14px; }
 .input-frame {
     display: flex;
     align-items: flex-start;
