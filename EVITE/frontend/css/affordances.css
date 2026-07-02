@@ -1,0 +1,137 @@
+/* ============================================================================
+   affordances.css — a shared "what can I touch?" layer for the ASCII terminal.
+
+   Loaded AFTER each page's inline <style>, so it strengthens the three
+   interactive element types everywhere from one place. It reuses the existing
+   class names; pages only add a single <link> to opt in.
+
+   The visual grammar it establishes:
+     BUTTON  = SOLID border + hard drop-shadow  → looks raised / pressable
+     INPUT   = dashed frame + green `>` prompt   → looks like a place to type
+     CARD    = dashed frame + `→` cue at rest    → looks openable
+
+   Mobile (max-width:480px) already ships keycap/press physics, so the button
+   keycap rules here are scoped to min-width:481px to avoid fighting it. The
+   input prompt and card arrow are universal — mobile lacked them too.
+   ========================================================================== */
+
+/* ---------------------------------------------------------------------------
+   INPUTS — a `>` prompt marks every field; focus lights it up.
+   --------------------------------------------------------------------------- */
+.input-frame {
+    display: flex;
+    align-items: flex-start;
+    background: #fff;
+}
+.input-frame::before {
+    content: '>';
+    color: #1d6b2e;            /* the same terminal-green used for success */
+    font-weight: bold;
+    margin-right: 8px;
+    flex-shrink: 0;
+    line-height: 1.5;
+    -webkit-user-select: none;
+    user-select: none;
+}
+.input-frame input,
+.input-frame textarea {
+    flex: 1;
+    min-width: 0;              /* let the input shrink inside the flex row */
+}
+
+/* Focused field: border goes solid, a soft highlight fills in, the prompt
+   brightens. The native text caret supplies the blink. */
+.input-frame:focus-within {
+    border-style: solid;
+    background: #f3faf4;
+    box-shadow: inset 0 0 0 1px #111;
+}
+.input-frame:focus-within::before { color: #111; }
+.input-frame:focus-within > .corner { background: #f3faf4; }
+
+/* ---------------------------------------------------------------------------
+   CARDS — an arrow at rest says "opens for more"; hover lifts the whole card.
+   --------------------------------------------------------------------------- */
+.event-card {
+    position: relative;
+    padding-right: 34px;       /* clear a lane for the arrow */
+}
+.event-card::after {
+    content: '\2192';          /* → */
+    position: absolute;
+    top: 12px;
+    right: 14px;
+    font-weight: bold;
+    color: #999;
+    transition: transform 0.15s ease, color 0.15s ease;
+    pointer-events: none;
+}
+.event-card:hover::after { color: #111; transform: translateX(3px); }
+
+/* ---------------------------------------------------------------------------
+   BUTTONS + hover-device card lift — pointer screens only (mobile has its own).
+   --------------------------------------------------------------------------- */
+@media (min-width: 481px) {
+
+    /* Primary buttons become solid raised keycaps. The `+` ascii corners are
+       dropped here so the solid border + shadow reads cleanly as a key; the
+       `[ ]` brackets already live in the label text. */
+    .ascii-button,
+    .cta-button {
+        border: 1px solid #111;
+        border-style: solid;
+        background: #fff;
+        box-shadow: 3px 3px 0 #111;
+        font-weight: bold;
+        transition: transform 0.06s ease, box-shadow 0.06s ease,
+                    background 0.12s ease, color 0.12s ease;
+    }
+    .ascii-button > .corner,
+    .cta-button > .corner { display: none; }
+
+    .ascii-button:hover,
+    .cta-button:hover { background: #111; color: #fff; }
+
+    .ascii-button:active,
+    .cta-button:active { transform: translate(3px, 3px); box-shadow: none; }
+
+    /* Destructive actions cast their shadow in red. */
+    .ascii-button.danger {
+        border-color: #a00;
+        color: #a00;
+        box-shadow: 3px 3px 0 #a00;
+    }
+    .ascii-button.danger:hover { background: #a00; color: #fff; }
+    .ascii-button.danger:active { transform: translate(3px, 3px); box-shadow: none; }
+
+    /* Toggle-style buttons (RSVP + date filter) get a shallower keycap; the
+       chosen one sits pressed-in and inverted. */
+    .rsvp-btn,
+    .filter-btn {
+        border: 1px solid #111;
+        background: #fff;
+        box-shadow: 0 2px 0 #111;
+        font-weight: bold;
+        transition: transform 0.06s ease, box-shadow 0.06s ease,
+                    background 0.12s ease, color 0.12s ease;
+    }
+    .rsvp-btn:hover,
+    .filter-btn:hover { background: #eee; }
+    .rsvp-btn:active,
+    .filter-btn:active { transform: translateY(2px); box-shadow: none; }
+    .rsvp-btn.selected,
+    .filter-btn.active {
+        background: #111;
+        color: #fff;
+        box-shadow: none;
+        transform: translateY(2px);
+    }
+    .rsvp-btn.selected:hover,
+    .filter-btn.active:hover { background: #111; }
+
+    /* Card hover on pointer devices: border firms up and the card lifts. */
+    .event-card:hover {
+        border-style: solid;
+        box-shadow: 3px 3px 0 rgba(0, 0, 0, 0.12);
+    }
+}
