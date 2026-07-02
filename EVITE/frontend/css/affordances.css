@@ -48,6 +48,20 @@ button:disabled { cursor: not-allowed; }
 .event-card { cursor: pointer; }
 .event-card .event-title { font-weight: bold; }
 
+/* Location links open the platform's default maps app. The `⌖` glyph (same
+   one as the profile page's locate button) plus a dashed underline mark them
+   as a different kind of jump than the card or page around them. */
+.map-link {
+    color: inherit;
+    text-decoration: underline dashed;
+    text-underline-offset: 3px;
+}
+.map-link::before {
+    content: '\2316 ';           /* ⌖ */
+    color: #1d6b2e;
+}
+.map-link:hover { background: #eee; }
+
 /* ---------------------------------------------------------------------------
    INPUTS — a `>` prompt marks every field; focus lights it up.
    --------------------------------------------------------------------------- */

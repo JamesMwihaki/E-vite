@@ -43,7 +43,10 @@ function render({ status, event, inviter, invitee_email }) {
     document.getElementById('invited-by').textContent = `${inviter} invited you to:`;
     document.getElementById('event-title').textContent = event.title || '(untitled)';
     document.getElementById('event-when').textContent = formatWhen(event.event_date, event.event_time);
-    document.getElementById('event-where').textContent = event.location || 'TBD';
+    const whereEl = document.getElementById('event-where');
+    whereEl.textContent = '';
+    if (event.location) whereEl.appendChild(mapsLink(event.location));
+    else whereEl.textContent = 'TBD';
     if (event.description) {
         document.getElementById('event-desc').textContent = event.description;
     } else {

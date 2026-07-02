@@ -86,7 +86,10 @@ function render(data) {
     }
 
     document.getElementById('event-when').textContent = formatWhen(event.event_date, event.event_time);
-    document.getElementById('event-where').textContent = event.location || 'TBD';
+    const whereEl = document.getElementById('event-where');
+    whereEl.textContent = '';
+    if (event.location) whereEl.appendChild(mapsLink(event.location));
+    else whereEl.textContent = 'TBD';
     document.getElementById('event-desc').textContent = event.description || 'No description yet.';
     renderCountdown(event.event_date, event.event_time);
 
