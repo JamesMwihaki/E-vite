@@ -252,19 +252,23 @@ function buildEventCard(event, rsvpStatus) {
         ` : ''}
     `;
 
-    // The whole card opens the detail page; clicks on the RSVP buttons don't.
+    // The whole card opens the detail page; clicks on the RSVP buttons and
+    // the maps link don't.
     card.addEventListener('click', (e) => {
-        if (e.target.closest('.rsvp-btn')) return;
+        if (e.target.closest('.rsvp-btn, .map-link')) return;
         window.location.href = `event.html?id=${event.id}`;
     });
     card.setAttribute('tabindex', '0');
     card.setAttribute('role', 'link');
     card.addEventListener('keydown', (e) => {
+        if (e.target.closest('.map-link')) return;
         if (e.key === 'Enter') window.location.href = `event.html?id=${event.id}`;
     });
 
     card.querySelector('.event-title').textContent = event.title || '';
-    card.querySelector('.event-location').textContent = `Location: ${event.location || ''}`;
+    const locationEl = card.querySelector('.event-location');
+    locationEl.textContent = 'Location: ';
+    if (event.location) locationEl.appendChild(mapsLink(event.location));
     card.querySelector('.event-date').textContent = formatEventDate(event);
     card.querySelector('.event-description').textContent = `Description: ${event.description || ''}`;
 
