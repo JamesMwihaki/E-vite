@@ -6,6 +6,7 @@
    class names; pages only add a single <link> to opt in.
 
    The visual grammar it establishes:
+     BOLD    = clickable — every interactive element, everywhere
      BUTTON  = SOLID border + hard drop-shadow  → looks raised / pressable
      INPUT   = dashed frame + green `>` prompt   → looks like a place to type
      CARD    = dashed frame + `→` cue at rest    → looks openable
@@ -14,6 +15,30 @@
    keycap rules here are scoped to min-width:481px to avoid fighting it. The
    input prompt and card arrow are universal — mobile lacked them too.
    ========================================================================== */
+
+/* ---------------------------------------------------------------------------
+   BOLD = CLICKABLE — the one-glance rule: if text is bold, you can press it.
+   Covers every link and button (nav items, back links, brand, prose links,
+   tree map controls), plus the JS-rendered pickers and chips.
+   --------------------------------------------------------------------------- */
+a,
+button,
+.clickable,
+.suggest-item,
+.chip-x {
+    font-weight: bold;
+}
+button { cursor: pointer; }
+button:disabled { cursor: not-allowed; }
+
+/* The secondary line inside an invite suggestion stays normal weight so the
+   row is still scannable — the bold name is the pressable handle. */
+.suggest-item .sub { font-weight: normal; }
+
+/* Clickable event cards: the title is the bold handle; the meta lines stay
+   normal so the card doesn't become a wall of bold. */
+.event-card { cursor: pointer; }
+.event-card .event-title { font-weight: bold; }
 
 /* ---------------------------------------------------------------------------
    INPUTS — a `>` prompt marks every field; focus lights it up.
