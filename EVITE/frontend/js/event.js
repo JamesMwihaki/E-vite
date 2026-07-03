@@ -68,11 +68,9 @@ function render(data) {
         || event.creator_username;
     const hostedBy = document.getElementById('hosted-by');
     if (event.discovered) {
-        // Agent-found events have no human host; show provenance instead.
+        // Agent-found events have no human host; link the original listing instead.
         hostedBy.innerHTML = '';
-        hostedBy.append('⚡ Found nearby by the E-vite scout');
         if (event.source_url) {
-            hostedBy.append(' · ');
             const src = document.createElement('a');
             src.href = event.source_url;
             src.target = '_blank';
