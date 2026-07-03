@@ -229,7 +229,6 @@ function buildEventCard(event, rsvpStatus) {
         <span class="corner tr">+</span>
         <span class="corner bl">+</span>
         <span class="corner br">+</span>
-        ${event.discovered ? '<span class="field event-discovered">[ ⚡ FOUND NEARBY ]</span>' : ''}
         <span class="field event-title"></span>
         <span class="field event-location"></span>
         <span class="field event-date"></span>
