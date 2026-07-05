@@ -281,8 +281,11 @@ ${JSON.stringify(ticketmasterEvents, null, 2)}`;
         // less cost; swap back to claude-opus-4-8 if curation quality dips.
         model: 'claude-sonnet-4-6',
         // Thinking tokens count toward max_tokens; 8 search rounds plus the
-        // final JSON need headroom (8K truncated mid-run).
-        max_tokens: 16000,
+        // final JSON need headroom (8K truncated mid-run; 16K truncated on
+        // dense markets like Denver — thinking across the search rounds ate
+        // the budget before the JSON finished). Cap, not target: typical
+        // runs are unaffected.
+        max_tokens: 32000,
         thinking: { type: 'adaptive' },
         // medium keeps the search loop tight — at the default (high) Sonnet
         // ran many more search/filter rounds than the function budget allows.
