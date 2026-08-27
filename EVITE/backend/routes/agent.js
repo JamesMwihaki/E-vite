@@ -2,7 +2,7 @@ const express = require('express');
 const logger = require('../utils/logger');
 const db = require('../db/database');
 const { requireAuth } = require('../middleware/auth');
-const { runDueClusters, reverseGeocode, suggestCities } = require('../agent/event-scout');
+const { runDueClusters, reverseGeocode, suggestCities, localClock } = require('../agent/event-scout');
 
 const router = express.Router();
 
@@ -57,6 +57,39 @@ router.get('/api/geo/suggest', requireAuth, async (req, res) => {
     } catch (error) {
         logger.error(`City suggest failed: ${error.message}`);
         res.json([]); // typeahead is best-effort; an empty list degrades gracefully
+    }
+});
+
+// Scout status for the viewer's city, today (in the viewer's local time).
+// The events page polls this while a run is live so discoveries stream in.
+// A 'running' row that hasn't transitioned in 10 minutes means the function
+// died mid-run (max duration is 300s) — report it as an error so the
+// frontend stops polling instead of spinning forever.
+router.get('/api/agent/status', requireAuth, async (req, res) => {
+    try {
+        const me = await db.query(
+            'SELECT location, timezone FROM users WHERE id = $1',
+            [req.session.user_id]
+        );
+        const city = (me.rows[0]?.location || '').trim();
+        if (!city) return res.json({ status: 'none' });
+
+        const { date: localDate } = localClock(me.rows[0].timezone);
+        const run = await db.query(
+            `SELECT status, events_found,
+                    created_at < NOW() - INTERVAL '10 minutes' AS stale
+             FROM agent_runs
+             WHERE LOWER(city) = LOWER($1) AND run_date = $2`,
+            [city, localDate]
+        );
+        if (run.rows.length === 0) return res.json({ status: 'none', city });
+
+        const row = run.rows[0];
+        const status = row.status === 'running' && row.stale ? 'error' : row.status;
+        res.json({ status, city, events_found: row.events_found });
+    } catch (error) {
+        logger.error(`Agent status failed: ${error.message}`);
+        res.json({ status: 'none' }); // best-effort: the page just won't poll
     }
 });
 

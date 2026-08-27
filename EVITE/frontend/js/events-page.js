@@ -1,11 +1,19 @@
 const EVENTS_ENDPOINT = "/api/create_event";
 const RSVP_ENDPOINT = "/api/rsvp";
 const RSVPS_ENDPOINT = "/api/rsvps";
+const AGENT_STATUS_ENDPOINT = "/api/agent/status";
 
 // Fetched once; re-rendered whenever the date filter changes.
 let allEvents = [];
 let rsvpMap = new Map();
 const dateFilter = { from: null, to: null }; // YYYY-MM-DD strings
+
+// Live scout feed: while a discovery run is going for the viewer's city, the
+// page polls for new events and flashes them in as they land.
+let scoutActive = false;
+const newEventIds = new Set();
+const SCOUT_POLL_MS = 8000;
+const SCOUT_POLL_MAX_MS = 8 * 60 * 1000; // safety stop if status gets stuck
 
 (async function init() {
     const user = await checkAuth();
@@ -20,6 +28,7 @@ const dateFilter = { from: null, to: null }; // YYYY-MM-DD strings
     wireDateFilter();
     showFlashIfAny();
     loadEvents();
+    watchScout();
 })();
 
 // One-shot confirmation toast (e.g. "e-vites sent") left by another page in
@@ -90,6 +99,84 @@ async function loadEvents() {
     }
 }
 
+/* ---- live scout feed ---- */
+
+// While the event scout is running for the viewer's city, poll for newly
+// discovered events so they stream onto the page instead of appearing only
+// after a manual refresh. Pages without the public list (my-evites) skip it.
+async function watchScout() {
+    if (!document.getElementById('public-list')) return;
+    if (await fetchScoutStatus() !== 'running') return;
+
+    setScoutNotice(true);
+    const startedAt = Date.now();
+    const tick = async () => {
+        const status = await fetchScoutStatus();
+        // Refresh even on the final tick — the run's last events land between
+        // the poll that saw 'running' and the one that sees 'ok'.
+        await refreshEvents();
+        if (status !== 'running' || Date.now() - startedAt > SCOUT_POLL_MAX_MS) {
+            setScoutNotice(false);
+            return;
+        }
+        setTimeout(tick, SCOUT_POLL_MS);
+    };
+    setTimeout(tick, SCOUT_POLL_MS);
+}
+
+async function fetchScoutStatus() {
+    try {
+        const res = await fetch(AGENT_STATUS_ENDPOINT, { credentials: 'include' });
+        if (!res.ok) return 'none';
+        return (await res.json()).status || 'none';
+    } catch {
+        return 'none';
+    }
+}
+
+// Refetch the events list and merge newly discovered events into the rendered
+// lists, flagging them so their cards flash in.
+async function refreshEvents() {
+    try {
+        const res = await fetch(EVENTS_ENDPOINT, { credentials: 'include' });
+        if (!res.ok) return;
+        const events = (await res.json()).filter(e => !isPastEvent(e));
+        const known = new Set(allEvents.map(e => e.id));
+        const fresh = events.filter(e => !known.has(e.id));
+        if (fresh.length === 0) return;
+        fresh.forEach(e => newEventIds.add(e.id));
+        allEvents = events;
+        renderLists();
+        // Let the flash-in play once; later re-renders (filter changes)
+        // shouldn't replay it.
+        setTimeout(() => fresh.forEach(e => newEventIds.delete(e.id)), 2500);
+    } catch (error) {
+        console.error('Event refresh failed:', error);
+    }
+}
+
+// "Scouting your area..." line above the public list; sits outside
+// #public-list because renderList wipes that container on every render.
+function setScoutNotice(visible) {
+    scoutActive = visible;
+    const existing = document.getElementById('scout-notice');
+    if (!visible) {
+        existing?.remove();
+        renderLists(); // let the section collapse rules resettle
+        return;
+    }
+    if (existing) return;
+    const list = document.getElementById('public-list');
+    if (!list) return;
+    const notice = document.createElement('div');
+    notice.id = 'scout-notice';
+    notice.className = 'scout-notice';
+    notice.setAttribute('role', 'status');
+    notice.textContent = "⚡ Scouting your area — events appear here as they're found";
+    list.parentNode.insertBefore(notice, list);
+    renderLists();
+}
+
 function renderLists() {
     const exclusiveSection = document.getElementById('exclusive-section');
     const publicSection = document.getElementById('public-section');
@@ -107,7 +194,9 @@ function renderLists() {
     // Optional chaining: my-evites.html shares this script but only has the
     // exclusive list, no section wrappers.
     const onlyPublic = exclusive.length === 0 && publicEvents.length > 0;
-    const onlyExclusive = publicEvents.length === 0 && exclusive.length > 0;
+    // While the scout is live, keep the public section open even when empty
+    // so the "scouting..." notice has somewhere to show.
+    const onlyExclusive = publicEvents.length === 0 && exclusive.length > 0 && !scoutActive;
     exclusiveSection?.classList.toggle('hidden', onlyPublic);
     publicSection?.classList.toggle('hidden', onlyExclusive);
     exclusiveList?.classList.toggle('expanded', onlyExclusive);
@@ -117,7 +206,8 @@ function renderLists() {
     renderList(exclusiveList, exclusive, rsvpMap,
         filtered ? 'No exclusive e-vites in this date range' : 'No upcoming exclusive e-vites');
     renderList(publicList, publicEvents, rsvpMap,
-        filtered ? 'No public e-vites in this date range' : 'No upcoming public e-vites');
+        scoutActive ? 'Nothing yet — the scout is still looking...'
+            : filtered ? 'No public e-vites in this date range' : 'No upcoming public e-vites');
 }
 
 /* ---- date filter ---- */
@@ -218,6 +308,7 @@ function buildEventCard(event, rsvpStatus) {
     const card = document.createElement('div');
     card.className = 'ascii-frame event-card';
     card.dataset.eventId = event.id;
+    if (newEventIds.has(event.id)) card.classList.add('event-new');
 
     const showRsvp = event.event_type === 'private';
     // The person who email-invited the viewer can be added as a friend right

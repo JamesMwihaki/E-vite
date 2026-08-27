@@ -205,7 +205,55 @@ async function fetchTicketmaster(coords, startDate, endDate) {
     }).filter(e => e.title && e.date);
 }
 
-async function askClaude(city, startDate, endDate, knownVenues, knownEvents, knownSources, ticketmasterEvents) {
+// Incremental extractor for the streamed response: pulls complete objects out
+// of the `"events": [...]` array as the JSON text arrives, so events can be
+// saved (and shown to users) before the run finishes. String-aware brace
+// matching; a malformed object is skipped and left to the final full parse.
+function createEventExtractor() {
+    let buffer = '';
+    let emitted = 0;
+    return function extract(delta) {
+        buffer += delta;
+        const eventsKey = buffer.indexOf('"events"');
+        if (eventsKey === -1) return [];
+        const arrayStart = buffer.indexOf('[', eventsKey);
+        if (arrayStart === -1) return [];
+        const fresh = [];
+        let i = arrayStart + 1;
+        let count = 0;
+        while (i < buffer.length) {
+            while (i < buffer.length && buffer[i] !== '{' && buffer[i] !== ']') i++;
+            if (i >= buffer.length || buffer[i] === ']') break;
+            const start = i;
+            let depth = 0, inString = false, escaped = false, end = -1;
+            for (; i < buffer.length; i++) {
+                const c = buffer[i];
+                if (inString) {
+                    if (escaped) escaped = false;
+                    else if (c === '\\') escaped = true;
+                    else if (c === '"') inString = false;
+                } else if (c === '"') inString = true;
+                else if (c === '{') depth++;
+                else if (c === '}') {
+                    depth--;
+                    if (depth === 0) { end = i; break; }
+                }
+            }
+            if (end === -1) break; // object still streaming — wait for more text
+            count++;
+            if (count > emitted) {
+                try {
+                    fresh.push(JSON.parse(buffer.slice(start, end + 1)));
+                    emitted = count;
+                } catch { /* final parse will handle it */ }
+            }
+            i = end + 1;
+        }
+        return fresh;
+    };
+}
+
+async function askClaude(city, startDate, endDate, knownVenues, knownEvents, knownSources, ticketmasterEvents, onEvents) {
     const anthropic = getAnthropic();
     if (!anthropic) return { events: ticketmasterEvents, venues: [] };
 
@@ -302,10 +350,22 @@ ${JSON.stringify(ticketmasterEvents, null, 2)}`;
         messages: [{ role: 'user', content: userText }],
     };
 
+    // As the final JSON streams out, each completed event object goes to
+    // onEvents immediately — that's what lets the frontend show discoveries
+    // while the run is still going.
+    const extractEvents = createEventExtractor();
+    const onText = (delta) => {
+        if (!onEvents) return;
+        const fresh = extractEvents(delta);
+        if (fresh.length) onEvents(fresh);
+    };
+
     // Streamed so the connection stays active while server-side web search
     // rounds run — a non-streaming call sits silent for minutes and trips
     // request timeouts.
-    let response = await anthropic.messages.stream(params).finalMessage();
+    let response = await anthropic.messages.stream(params)
+        .on('text', onText)
+        .finalMessage();
     // Server-side web search can pause its loop; re-send to let it resume.
     // The web search tool's dynamic filtering runs code execution in a
     // container — continuations must reference it or the API returns 400.
@@ -317,7 +377,9 @@ ${JSON.stringify(ticketmasterEvents, null, 2)}`;
                 { role: 'user', content: userText },
                 { role: 'assistant', content: response.content },
             ],
-        }).finalMessage();
+        })
+            .on('text', onText)
+            .finalMessage();
     }
 
     const text = response.content
@@ -469,9 +531,26 @@ async function runForCity(city, localDate) {
         [city]
     );
 
+    // Events are saved the moment they stream out of the model, so users
+    // polling the events page see discoveries while the run is still going.
+    // The final saveEvents pass below is the safety net for anything the
+    // incremental parser skipped; external_key dedupes the overlap.
+    const pendingSaves = [];
+    const onEvents = (found) => {
+        pendingSaves.push(
+            saveEvents(city, found, startDate, endDate, scoutId, coords)
+                .catch((err) => {
+                    logger.warn(`Incremental save failed for ${city}: ${err.message}`);
+                    return 0;
+                })
+        );
+    };
+
     const { events, venues } = await askClaude(
-        city, startDate, endDate, venuesRes.rows, knownRes.rows, sourcesRes.rows, tmEvents);
-    const saved = await saveEvents(city, events, startDate, endDate, scoutId, coords);
+        city, startDate, endDate, venuesRes.rows, knownRes.rows, sourcesRes.rows, tmEvents, onEvents);
+    const incremental = (await Promise.all(pendingSaves)).reduce((a, b) => a + b, 0);
+    const saved = incremental
+        + await saveEvents(city, events, startDate, endDate, scoutId, coords);
     await saveVenues(city, venues);
     await saveSources(city, events);
 
@@ -479,6 +558,9 @@ async function runForCity(city, localDate) {
     return saved;
 }
 
+// created_at is refreshed on every transition so it doubles as "when did the
+// run last change state" — the status endpoint uses it to treat a 'running'
+// row whose function died as stale rather than reporting it forever.
 async function recordRun(city, runDate, status, eventsFound, detail) {
     await db.query(
         `INSERT INTO agent_runs (city, run_date, status, events_found, detail)
@@ -486,7 +568,8 @@ async function recordRun(city, runDate, status, eventsFound, detail) {
          ON CONFLICT (city, run_date)
          DO UPDATE SET status = EXCLUDED.status,
                        events_found = EXCLUDED.events_found,
-                       detail = EXCLUDED.detail`,
+                       detail = EXCLUDED.detail,
+                       created_at = NOW()`,
         [city, runDate, status, eventsFound, detail]
     );
 }
@@ -511,6 +594,9 @@ async function runCityIfDue(city, timezone, { force = false } = {}) {
         return { status: 'skipped', reason: 'already ran today' };
     }
     try {
+        // Mark the run live up front so /api/agent/status (and the events
+        // page's "scouting..." indicator) can see discovery in progress.
+        await recordRun(city, localDate, 'running', 0, null).catch(() => {});
         const saved = await runForCity(city, localDate);
         await recordRun(city, localDate, 'ok', saved, null);
         return { status: 'ran', new_events: saved };
@@ -579,5 +665,5 @@ async function runDueClusters({ force = false } = {}) {
 
 module.exports = {
     runDueClusters, runForCity, runCityIfDue, isCityDue,
-    geocode, reverseGeocode, suggestCities,
+    geocode, reverseGeocode, suggestCities, localClock,
 };
