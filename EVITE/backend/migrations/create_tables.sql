@@ -150,6 +150,13 @@ CREATE TABLE IF NOT EXISTS event_messages (
 );
 CREATE INDEX IF NOT EXISTS event_messages_event_idx ON event_messages(event_id, id);
 
+-- Scout runs now write a 'running' row at start (and save events as they're
+-- found), so the frontend can show discovery progress live. CHECK constraints
+-- can't be altered in place — drop + re-add keeps this idempotent.
+ALTER TABLE agent_runs DROP CONSTRAINT IF EXISTS agent_runs_status_check;
+ALTER TABLE agent_runs ADD CONSTRAINT agent_runs_status_check
+    CHECK (status IN ('running', 'ok', 'error'));
+
 -- System user that owns agent-discovered events. password_hash stays NULL so
 -- nobody can log in as it.
 INSERT INTO users (username, email, first_name, last_name)

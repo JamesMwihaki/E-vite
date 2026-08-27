@@ -129,6 +129,29 @@ button:disabled { cursor: not-allowed; }
 .event-card:hover::after { color: #111; transform: translateX(3px); }
 
 /* ---------------------------------------------------------------------------
+   SCOUT LIVE FEED — while the event scout searches the viewer's city, a
+   status line sits above the public list and new finds flash in as they land.
+   --------------------------------------------------------------------------- */
+.scout-notice {
+    margin: 0 0 10px;
+    color: #1d6b2e;            /* terminal-green: something good is happening */
+    font-weight: bold;
+}
+.scout-notice::after {
+    content: '_';              /* blinking cursor: the scout is still typing */
+    animation: scout-blink 1s steps(1) infinite;
+}
+@keyframes scout-blink { 50% { opacity: 0; } }
+
+.event-card.event-new {
+    animation: event-new-flash 1.8s ease-out;
+}
+@keyframes event-new-flash {
+    from { background: #f3faf4; box-shadow: inset 0 0 0 1px #1d6b2e; }
+    to   { background: transparent; box-shadow: none; }
+}
+
+/* ---------------------------------------------------------------------------
    BUTTONS + hover-device card lift — pointer screens only (mobile has its own).
    --------------------------------------------------------------------------- */
 @media (min-width: 481px) {
