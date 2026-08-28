@@ -178,6 +178,22 @@ CREATE TABLE IF NOT EXISTS gmail_accounts (
     last_detail TEXT
 );
 
+-- Where a discovered event came from: 'web' (event scout) or 'email' (mail
+-- scout). discovered_for scopes email events to the user whose inbox they
+-- came from — school flyers are personal, not city-wide. The backfill only
+-- touches NULL rows, so re-running on every cold start is a no-op.
+ALTER TABLE events ADD COLUMN IF NOT EXISTS discovery_source VARCHAR(20);
+ALTER TABLE events ADD COLUMN IF NOT EXISTS discovered_for INTEGER REFERENCES users(id) ON DELETE CASCADE;
+-- Best-effort backfill for events saved before this column existed: a
+-- mail.google.com source link marks the mail scout, everything else the
+-- web scout.
+UPDATE events
+SET discovery_source = CASE
+    WHEN source_url LIKE 'https://mail.google.com/%' THEN 'email'
+    ELSE 'web'
+END
+WHERE discovered AND discovery_source IS NULL;
+
 -- Messages already scanned, so each email is analyzed exactly once.
 CREATE TABLE IF NOT EXISTS gmail_messages (
     id SERIAL PRIMARY KEY,
