@@ -13,8 +13,13 @@ const logger = require('../utils/logger');
 const db = require('../db/database');
 const { localClock } = require('./event-scout');
 
-const SEARCH_QUERY = 'newer_than:14d in:inbox';
-const MAX_MESSAGES_PER_RUN = 10; // Claude call per message — keep runs bounded
+// 6-month lookback: old flyers whose events have passed cost a Claude call
+// and yield nothing, but anything announcing a still-upcoming event is worth
+// finding. Processed messages are recorded, so each run continues working
+// backward through the backlog where the last one stopped.
+const SEARCH_QUERY = 'newer_than:180d in:inbox';
+const MAX_MESSAGES_PER_RUN = 15; // Claude call per message — keep runs bounded
+const MAX_BACKLOG_SCAN = 500; // how many unprocessed ids to enumerate per run
 const HORIZON_DAYS = 90; // school flyers announce whole-semester events
 const RUN_BUDGET_MS = 240 * 1000; // headroom under the 300s function cap
 const FETCH_TIMEOUT_MS = 15 * 1000;
@@ -329,24 +334,38 @@ async function syncAccount(account, { budgetMs = RUN_BUDGET_MS } = {}) {
     const endDate = plusDays(todayDate, HORIZON_DAYS);
     const scoutId = await getScoutUserId();
 
-    const list = await gmailGet(accessToken,
-        `/messages?q=${encodeURIComponent(SEARCH_QUERY)}&maxResults=25`);
-    const ids = (list.messages || []).map(m => m.id);
-    if (!ids.length) {
-        await recordSync(account.id, 'ok', 0, null);
-        return { checked: 0, events_found: 0 };
-    }
+    // Page through the inbox (newest first) collecting message ids we haven't
+    // processed yet. Listing is cheap; only the Claude analysis is bounded by
+    // MAX_MESSAGES_PER_RUN, so the backlog shrinks run over run until the
+    // whole lookback window is covered.
+    const fresh = [];
+    let pageToken = null;
+    let moreUnscanned = false;
+    do {
+        const page = await gmailGet(accessToken,
+            `/messages?q=${encodeURIComponent(SEARCH_QUERY)}&maxResults=100`
+            + (pageToken ? `&pageToken=${encodeURIComponent(pageToken)}` : ''));
+        const ids = (page.messages || []).map(m => m.id);
+        if (ids.length) {
+            const seen = await db.query(
+                'SELECT gmail_id FROM gmail_messages WHERE account_id = $1 AND gmail_id = ANY($2)',
+                [account.id, ids]
+            );
+            const seenIds = new Set(seen.rows.map(r => r.gmail_id));
+            fresh.push(...ids.filter(id => !seenIds.has(id)));
+        }
+        pageToken = page.nextPageToken || null;
+        moreUnscanned = Boolean(pageToken) && fresh.length >= MAX_BACKLOG_SCAN;
+    } while (pageToken && fresh.length < MAX_BACKLOG_SCAN);
 
-    const seen = await db.query(
-        'SELECT gmail_id FROM gmail_messages WHERE account_id = $1 AND gmail_id = ANY($2)',
-        [account.id, ids]
-    );
-    const seenIds = new Set(seen.rows.map(r => r.gmail_id));
-    const fresh = ids.filter(id => !seenIds.has(id)).slice(0, MAX_MESSAGES_PER_RUN);
+    if (!fresh.length) {
+        await recordSync(account.id, 'ok', 0, null);
+        return { checked: 0, events_found: 0, remaining: 0 };
+    }
 
     let checked = 0;
     let totalFound = 0;
-    for (const gmailId of fresh) {
+    for (const gmailId of fresh.slice(0, MAX_MESSAGES_PER_RUN)) {
         if (Date.now() - started > budgetMs) break; // rest picked up next run
         try {
             const content = await loadMessageContent(accessToken, gmailId);
@@ -368,8 +387,12 @@ async function syncAccount(account, { budgetMs = RUN_BUDGET_MS } = {}) {
         }
     }
 
+    // How much backlog is left (emails found but not yet analyzed), so the
+    // UI can say "run again to continue". A budget break leaves skipped
+    // messages in the count too, since checked can stop short of the slice.
+    const remaining = fresh.length - checked;
     await recordSync(account.id, 'ok', totalFound, null);
-    return { checked, events_found: totalFound };
+    return { checked, events_found: totalFound, remaining, more: moreUnscanned };
 }
 
 function plusDays(isoDate, days) {

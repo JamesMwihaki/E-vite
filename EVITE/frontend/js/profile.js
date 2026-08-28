@@ -374,10 +374,15 @@ async function syncGmail() {
             return;
         }
         const found = data.events_found || 0;
-        setMsg(gmailMsgEl, found
+        const remaining = data.remaining || 0;
+        const foundText = found
             ? `✉ Found ${found} event${found === 1 ? '' : 's'} — check the events page.`
-            : `Checked ${data.checked} new email${data.checked === 1 ? '' : 's'} — no new events this time.`,
-            'success');
+            : `Checked ${data.checked} email${data.checked === 1 ? '' : 's'} — no new events this time.`;
+        // Older mail is worked through in batches; nudge until it's done.
+        const backlogText = remaining > 0
+            ? ` ${remaining}${data.more ? '+' : ''} older email${remaining === 1 ? '' : 's'} still queued — hit CHECK NOW again to keep going.`
+            : '';
+        setMsg(gmailMsgEl, foundText + backlogText, 'success');
         loadGmailStatus();
     } catch (error) {
         console.error('Gmail sync failed:', error);
