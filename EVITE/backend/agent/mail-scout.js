@@ -153,6 +153,50 @@ function htmlToText(html) {
         .trim();
 }
 
+// School newsletters (Mailchimp/Salesforce-style senders) usually carry the
+// flyer as a remotely hosted <img>, not an attachment — without fetching
+// those, Claude sees only boilerplate text and finds nothing. Pull the first
+// few real images out of the HTML; tiny files are tracking pixels and logos.
+const MIN_REMOTE_IMAGE_BYTES = 15 * 1024;
+
+function remoteImageUrls(html) {
+    const urls = [];
+    const regex = /<img[^>]+src=["']?(https?:\/\/[^"'\s>]+)/gi;
+    let m;
+    while ((m = regex.exec(html)) && urls.length < 12) {
+        const url = m[1].replace(/&amp;/g, '&');
+        if (!urls.includes(url)) urls.push(url);
+    }
+    return urls;
+}
+
+async function fetchRemoteImages(html, maxCount) {
+    const blocks = [];
+    for (const url of remoteImageUrls(html)) {
+        if (blocks.length >= maxCount) break;
+        try {
+            // Email HTML is untrusted input — don't let it point the server
+            // at internal addresses.
+            const host = new URL(url).hostname;
+            if (host === 'localhost' || /^[\d.:[]/.test(host)) continue;
+            const res = await fetch(url, {
+                redirect: 'follow',
+                signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+            });
+            if (!res.ok) continue;
+            const type = (res.headers.get('content-type') || '').split(';')[0].trim().toLowerCase();
+            if (!IMAGE_TYPES.has(type)) continue;
+            const buf = Buffer.from(await res.arrayBuffer());
+            if (buf.length < MIN_REMOTE_IMAGE_BYTES || buf.length > MAX_ATTACHMENT_BYTES) continue;
+            blocks.push({
+                type: 'image',
+                source: { type: 'base64', media_type: type, data: buf.toString('base64') },
+            });
+        } catch { /* unreachable/hostile image — skip it */ }
+    }
+    return blocks;
+}
+
 function headerValue(headers, name) {
     const h = (headers || []).find(x => x.name?.toLowerCase() === name.toLowerCase());
     return h ? h.value : '';
@@ -205,6 +249,13 @@ async function loadMessageContent(accessToken, gmailId) {
         } catch (err) {
             logger.warn(`Attachment fetch failed for ${gmailId}: ${err.message}`);
         }
+    }
+
+    // No (or few) attached images but an HTML body: the flyer is probably a
+    // hosted image — fetch enough to fill the block budget.
+    if (content.blocks.length < MAX_ATTACHMENTS && out.html) {
+        const remote = await fetchRemoteImages(out.html, MAX_ATTACHMENTS - content.blocks.length);
+        content.blocks.push(...remote);
     }
     return content;
 }

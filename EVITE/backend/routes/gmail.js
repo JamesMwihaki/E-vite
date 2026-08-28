@@ -98,8 +98,30 @@ router.get('/api/gmail/status', requireAuth, async (req, res) => {
     }
 });
 
+// What the scout has looked at and what each email yielded — the trust view
+// for "why isn't my flyer showing up?".
+router.get('/api/gmail/messages', requireAuth, async (req, res) => {
+    try {
+        const result = await db.query(
+            `SELECT m.subject, m.events_found, m.processed_at
+             FROM gmail_messages m
+             JOIN gmail_accounts a ON a.id = m.account_id
+             WHERE a.user_id = $1
+             ORDER BY m.processed_at DESC
+             LIMIT 25`,
+            [req.session.user_id]
+        );
+        res.json(result.rows);
+    } catch (err) {
+        logger.error(`Gmail scan log failed: ${err.message}`);
+        res.status(500).json({ message: 'Scan log lookup failed' });
+    }
+});
+
 // Manual "check now" from the profile page. Runs inline — the 300s function
 // budget covers a capped run, and the response reports what was found.
+// { rescan: true } forgets every already-scanned email that yielded nothing,
+// so improved extraction gets another look at them.
 router.post('/api/gmail/sync', requireAuth, async (req, res) => {
     try {
         const account = await db.query(
@@ -108,6 +130,13 @@ router.post('/api/gmail/sync', requireAuth, async (req, res) => {
         );
         if (!account.rows.length) {
             return res.status(404).json({ message: 'No Gmail account connected' });
+        }
+        if (req.body && req.body.rescan) {
+            const cleared = await db.query(
+                'DELETE FROM gmail_messages WHERE account_id = $1 AND events_found = 0 RETURNING id',
+                [account.rows[0].id]
+            );
+            logger.info(`Gmail rescan: requeued ${cleared.rows.length} zero-event message(s)`);
         }
         const result = await mailScout.syncAccount(account.rows[0]);
         res.json(result);
