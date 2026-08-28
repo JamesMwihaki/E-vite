@@ -281,16 +281,19 @@ async function saveEvents(events, owner, gmailId, todayDate, endDate, scoutId) {
         // No link in the email itself -> deep-link to the source message, so
         // the account owner can jump back to the original flyer.
         const sourceUrl = e.source_url || `https://mail.google.com/mail/u/0/#all/${gmailId}`;
+        // discovery_source 'email' + discovered_for scope these to the inbox
+        // owner — school flyers shouldn't broadcast to the whole city.
         const result = await db.query(
             `INSERT INTO events
                  (title, description, event_date, event_time, location, event_type,
-                  creator_id, discovered, source_url, external_key, city, latitude, longitude)
-             VALUES ($1, $2, $3, $4, $5, 'public', $6, TRUE, $7, $8, $9, $10, $11)
+                  creator_id, discovered, discovery_source, discovered_for,
+                  source_url, external_key, city, latitude, longitude)
+             VALUES ($1, $2, $3, $4, $5, 'public', $6, TRUE, 'email', $7, $8, $9, $10, $11, $12)
              ON CONFLICT (external_key) DO NOTHING
              RETURNING id`,
             [
                 String(e.title).slice(0, 255), e.description || null, e.date, time,
-                location || null, scoutId, sourceUrl,
+                location || null, scoutId, owner.id, sourceUrl,
                 externalKey(e.title, e.date, e.venue || ''),
                 owner.location || null, owner.latitude, owner.longitude,
             ]
@@ -319,9 +322,9 @@ async function syncAccount(account, { budgetMs = RUN_BUDGET_MS } = {}) {
     const accessToken = tokens.access_token;
 
     const owner = (await db.query(
-        'SELECT location, latitude, longitude, timezone FROM users WHERE id = $1',
+        'SELECT id, location, latitude, longitude, timezone FROM users WHERE id = $1',
         [account.user_id]
-    )).rows[0] || {};
+    )).rows[0] || { id: account.user_id };
     const { date: todayDate } = localClock(owner.timezone);
     const endDate = plusDays(todayDate, HORIZON_DAYS);
     const scoutId = await getScoutUserId();

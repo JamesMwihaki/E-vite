@@ -188,15 +188,25 @@ function renderLists() {
         .filter(inDateFilter)
         .sort((a, b) => (eventDateValue(a) ?? 0) - (eventDateValue(b) ?? 0));
     const exclusive = visible.filter(e => e.event_type === 'private');
-    const publicEvents = visible.filter(e => e.event_type === 'public');
+    const publicAll = visible.filter(e => e.event_type === 'public');
+    // Mail-scout events (from the viewer's own inbox) get their own block
+    // above the regular public list.
+    const mailEvents = publicAll.filter(e => e.discovery_source === 'email');
+    const publicEvents = publicAll.filter(e => e.discovery_source !== 'email');
 
     // When one side has nothing to show, give the other the whole page.
     // Optional chaining: my-evites.html shares this script but only has the
     // exclusive list, no section wrappers.
-    const onlyPublic = exclusive.length === 0 && publicEvents.length > 0;
+    const onlyPublic = exclusive.length === 0 && publicAll.length > 0;
     // While the scout is live, keep the public section open even when empty
     // so the "scouting..." notice has somewhere to show.
-    const onlyExclusive = publicEvents.length === 0 && exclusive.length > 0 && !scoutActive;
+    const onlyExclusive = publicAll.length === 0 && exclusive.length > 0 && !scoutActive;
+
+    const mailBlock = document.getElementById('mail-block');
+    if (mailBlock) {
+        mailBlock.classList.toggle('hidden', mailEvents.length === 0);
+        renderList(document.getElementById('mail-list'), mailEvents, rsvpMap, '');
+    }
     exclusiveSection?.classList.toggle('hidden', onlyPublic);
     publicSection?.classList.toggle('hidden', onlyExclusive);
     exclusiveList?.classList.toggle('expanded', onlyExclusive);
@@ -324,6 +334,7 @@ function buildEventCard(event, rsvpStatus) {
         <span class="field event-location"></span>
         <span class="field event-date"></span>
         <span class="field event-description"></span>
+        ${event.discovered ? '<span class="field event-source-tag"></span>' : ''}
         ${showFriendBtn ? `
             <div class="friend-block">
                 <button type="button" class="rsvp-btn friend-btn"></button>
@@ -361,6 +372,12 @@ function buildEventCard(event, rsvpStatus) {
     if (event.location) locationEl.appendChild(mapsLink(event.location));
     card.querySelector('.event-date').textContent = formatEventDate(event);
     card.querySelector('.event-description').textContent = `Description: ${event.description || ''}`;
+    if (event.discovered) {
+        card.querySelector('.event-source-tag').textContent =
+            event.discovery_source === 'email'
+                ? '✉ from your inbox'
+                : '⌖ found by the scout';
+    }
 
     if (showFriendBtn) {
         const friendBtn = card.querySelector('.friend-btn');

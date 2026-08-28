@@ -436,8 +436,9 @@ async function saveEvents(city, events, startDate, endDate, scoutId, coords) {
         const result = await db.query(
             `INSERT INTO events
                  (title, description, event_date, event_time, location, event_type,
-                  creator_id, discovered, source_url, external_key, city, latitude, longitude)
-             VALUES ($1, $2, $3, $4, $5, 'public', $6, TRUE, $7, $8, $9, $10, $11)
+                  creator_id, discovered, discovery_source, source_url, external_key,
+                  city, latitude, longitude)
+             VALUES ($1, $2, $3, $4, $5, 'public', $6, TRUE, 'web', $7, $8, $9, $10, $11)
              ON CONFLICT (external_key) DO NOTHING
              RETURNING id`,
             [

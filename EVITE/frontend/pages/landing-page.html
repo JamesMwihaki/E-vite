@@ -207,6 +207,19 @@
             font-style: italic;
             padding: 8px 4px;
         }
+        /* Sub-headers splitting the public list into inbox vs around-town */
+        .sub-label {
+            text-align: center;
+            font-weight: bold;
+            font-size: 0.85em;
+            letter-spacing: 0.5px;
+            margin: 4px 0 10px;
+        }
+        .sub-label::before { content: '-- '; color: #888; }
+        .sub-label::after  { content: ' --'; color: #888; }
+        #mail-list + .sub-label { margin-top: 14px; }
+        #mail-list { margin-bottom: 4px; }
+        .event-source-tag { font-size: 0.8em; color: #777; }
         .event-card {
             padding: 12px 14px;
             display: grid;
@@ -479,6 +492,13 @@
 
         <div class="section" id="public-section">
             <div class="section-label">Public E-vites</div>
+            <!-- Mail-scout events get their own labeled block; the whole
+                 thing (incl. the "around town" divider) hides when empty. -->
+            <div id="mail-block" class="hidden">
+                <div class="sub-label">✉ from your inbox</div>
+                <div id="mail-list" class="event-list"></div>
+                <div class="sub-label">⌖ around town</div>
+            </div>
             <div id="public-list" class="event-list scrollable"></div>
         </div>
         </main>
