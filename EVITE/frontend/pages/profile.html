@@ -199,6 +199,35 @@
         }
         .mail-scout-status .connected-as { font-weight: bold; }
         .mail-scout-buttons { gap: 10px; flex-wrap: wrap; }
+        .scan-log-toggle {
+            text-align: center;
+            margin-top: 10px;
+            font-size: 0.85em;
+            display: flex;
+            justify-content: center;
+            gap: 14px;
+        }
+        .scan-log {
+            margin-top: 8px;
+            border-top: 1px dashed #999;
+            padding-top: 8px;
+            font-size: 0.8em;
+            max-height: 180px;
+            overflow-y: auto;
+        }
+        .scan-log .log-row {
+            display: flex;
+            justify-content: space-between;
+            gap: 8px;
+            padding: 2px 0;
+        }
+        .scan-log .log-subject {
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        .scan-log .log-hits { color: #777; flex-shrink: 0; }
+        .scan-log .log-hits.found { color: #1d6b2e; font-weight: bold; }
 
         .message {
             text-align: center;
@@ -476,6 +505,11 @@
                 </button>
             </div>
             <div class="message" id="gmail_message"></div>
+            <div class="scan-log-toggle">
+                <span class="clickable" id="gmail_log_btn" hidden>[ ≡ SCAN LOG ]</span>
+                <span class="clickable" id="gmail_rescan_btn" hidden title="Re-analyze scanned emails that yielded no events">[ ⟲ RESCAN ]</span>
+            </div>
+            <div class="scan-log" id="gmail_log" hidden></div>
         </div>
 
         <div class="section">

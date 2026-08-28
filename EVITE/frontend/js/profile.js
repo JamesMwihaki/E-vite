@@ -33,8 +33,10 @@ const gmailStatusEl = document.getElementById('gmail_status');
     document.getElementById('gmail_connect_btn').addEventListener('click', () => {
         window.location.href = '/api/gmail/connect';
     });
-    document.getElementById('gmail_sync_btn').addEventListener('click', syncGmail);
+    document.getElementById('gmail_sync_btn').addEventListener('click', () => syncGmail(false));
     document.getElementById('gmail_disconnect_btn').addEventListener('click', disconnectGmail);
+    document.getElementById('gmail_log_btn').addEventListener('click', toggleScanLog);
+    document.getElementById('gmail_rescan_btn').addEventListener('click', () => syncGmail(true));
 
     populateFromUser(user);
     loadStats();
@@ -318,6 +320,44 @@ function showGmailButtons(connected) {
     document.getElementById('gmail_connect_btn').hidden = connected;
     document.getElementById('gmail_sync_btn').hidden = !connected;
     document.getElementById('gmail_disconnect_btn').hidden = !connected;
+    document.getElementById('gmail_log_btn').hidden = !connected;
+    document.getElementById('gmail_rescan_btn').hidden = !connected;
+}
+
+// "What did the scout look at, and what did each email yield?" — collapsible
+// list under the mail scout controls.
+async function toggleScanLog() {
+    const log = document.getElementById('gmail_log');
+    if (!log.hidden) { log.hidden = true; return; }
+    log.hidden = false;
+    log.textContent = 'Loading…';
+    try {
+        const response = await fetch('/api/gmail/messages', { credentials: 'include' });
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        const rows = await response.json();
+        log.innerHTML = '';
+        if (!rows.length) {
+            log.textContent = 'Nothing scanned yet — hit CHECK NOW.';
+            return;
+        }
+        for (const row of rows) {
+            const div = document.createElement('div');
+            div.className = 'log-row';
+            const subject = document.createElement('span');
+            subject.className = 'log-subject';
+            subject.textContent = row.subject || '(no subject)';
+            const hits = document.createElement('span');
+            hits.className = 'log-hits' + (row.events_found > 0 ? ' found' : '');
+            hits.textContent = row.events_found > 0
+                ? `${row.events_found} event${row.events_found === 1 ? '' : 's'}`
+                : 'no events';
+            div.append(subject, hits);
+            log.appendChild(div);
+        }
+    } catch (error) {
+        console.error('Scan log failed:', error);
+        log.textContent = 'Could not load the scan log.';
+    }
 }
 
 async function loadGmailStatus() {
@@ -359,14 +399,18 @@ async function loadGmailStatus() {
     }
 }
 
-async function syncGmail() {
+async function syncGmail(rescan) {
     const btn = document.getElementById('gmail_sync_btn');
     btn.disabled = true;
-    setMsg(gmailMsgEl, 'Scanning your inbox for event flyers — this can take a minute…');
+    setMsg(gmailMsgEl, rescan
+        ? 'Re-analyzing previously scanned emails — this can take a minute…'
+        : 'Scanning your inbox for event flyers — this can take a minute…');
     try {
         const response = await fetch('/api/gmail/sync', {
             method: 'POST',
             credentials: 'include',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ rescan: Boolean(rescan) }),
         });
         const data = await response.json().catch(() => ({}));
         if (!response.ok) {
@@ -374,10 +418,15 @@ async function syncGmail() {
             return;
         }
         const found = data.events_found || 0;
-        setMsg(gmailMsgEl, found
+        const remaining = data.remaining || 0;
+        const foundText = found
             ? `✉ Found ${found} event${found === 1 ? '' : 's'} — check the events page.`
-            : `Checked ${data.checked} new email${data.checked === 1 ? '' : 's'} — no new events this time.`,
-            'success');
+            : `Checked ${data.checked} email${data.checked === 1 ? '' : 's'} — no new events this time.`;
+        // Older mail is worked through in batches; nudge until it's done.
+        const backlogText = remaining > 0
+            ? ` ${remaining}${data.more ? '+' : ''} older email${remaining === 1 ? '' : 's'} still queued — hit CHECK NOW again to keep going.`
+            : '';
+        setMsg(gmailMsgEl, foundText + backlogText, 'success');
         loadGmailStatus();
     } catch (error) {
         console.error('Gmail sync failed:', error);
