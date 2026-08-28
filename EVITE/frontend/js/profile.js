@@ -18,6 +18,8 @@ const newPwInput = document.getElementById('new_password');
 
 const profileMsgEl = document.getElementById('profile_message');
 const passwordMsgEl = document.getElementById('password_message');
+const gmailMsgEl = document.getElementById('gmail_message');
+const gmailStatusEl = document.getElementById('gmail_status');
 
 (async function init() {
     const user = await checkAuth();
@@ -28,8 +30,28 @@ const passwordMsgEl = document.getElementById('password_message');
     document.getElementById('save_password_btn').addEventListener('click', savePassword);
     document.getElementById('detect_location_btn').addEventListener('click', () => detectLocation(false));
 
+    document.getElementById('gmail_connect_btn').addEventListener('click', () => {
+        window.location.href = '/api/gmail/connect';
+    });
+    document.getElementById('gmail_sync_btn').addEventListener('click', syncGmail);
+    document.getElementById('gmail_disconnect_btn').addEventListener('click', disconnectGmail);
+
     populateFromUser(user);
     loadStats();
+    loadGmailStatus();
+
+    // Coming back from the Google OAuth dance: /profile?gmail=connected|denied|error
+    const gmailResult = new URLSearchParams(window.location.search).get('gmail');
+    if (gmailResult === 'connected') {
+        setMsg(gmailMsgEl, 'Gmail connected. ✉ The scout will check for event flyers daily — or hit CHECK NOW.', 'success');
+    } else if (gmailResult === 'denied') {
+        setMsg(gmailMsgEl, 'Google access was declined — nothing was connected.', 'error');
+    } else if (gmailResult === 'error') {
+        setMsg(gmailMsgEl, 'Connecting Gmail failed — try again.', 'error');
+    }
+    if (gmailResult) {
+        history.replaceState(null, '', window.location.pathname); // don't re-show on refresh
+    }
 
     // Device location is the primary source: if permission was already
     // granted, detect silently (no permission popup). An empty field is
@@ -287,6 +309,101 @@ async function savePassword() {
     } catch (error) {
         console.error('Save password failed:', error);
         setMsg(passwordMsgEl, 'Could not reach the server.', 'error');
+    }
+}
+
+/* ---- mail scout (Gmail) ---- */
+
+function showGmailButtons(connected) {
+    document.getElementById('gmail_connect_btn').hidden = connected;
+    document.getElementById('gmail_sync_btn').hidden = !connected;
+    document.getElementById('gmail_disconnect_btn').hidden = !connected;
+}
+
+async function loadGmailStatus() {
+    try {
+        const response = await fetch('/api/gmail/status', { credentials: 'include' });
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        const status = await response.json();
+        if (!status.connected) {
+            gmailStatusEl.textContent = status.configured
+                ? 'Not connected.'
+                : 'Not available — Gmail is not configured on the server.';
+            showGmailButtons(false);
+            if (!status.configured) document.getElementById('gmail_connect_btn').hidden = true;
+            return;
+        }
+        const bits = [`Connected as ${status.email}.`];
+        if (status.last_status === 'revoked') {
+            bits.push('⚠ Google access was revoked — reconnect.');
+        } else if (status.last_synced_at) {
+            bits.push(`Last checked ${new Date(status.last_synced_at).toLocaleString()}.`);
+        }
+        if (status.total_events > 0) {
+            bits.push(`${status.total_events} event${status.total_events === 1 ? '' : 's'} found so far.`);
+        }
+        gmailStatusEl.innerHTML = '';
+        const strong = document.createElement('span');
+        strong.className = 'connected-as';
+        strong.textContent = bits.shift();
+        gmailStatusEl.appendChild(strong);
+        gmailStatusEl.appendChild(document.createTextNode(' ' + bits.join(' ')));
+        showGmailButtons(true);
+        // A revoked connection needs the connect button back to re-consent.
+        if (status.last_status === 'revoked') {
+            document.getElementById('gmail_connect_btn').hidden = false;
+        }
+    } catch (error) {
+        console.error('Gmail status failed:', error);
+        gmailStatusEl.textContent = 'Could not load Gmail status.';
+    }
+}
+
+async function syncGmail() {
+    const btn = document.getElementById('gmail_sync_btn');
+    btn.disabled = true;
+    setMsg(gmailMsgEl, 'Scanning your inbox for event flyers — this can take a minute…');
+    try {
+        const response = await fetch('/api/gmail/sync', {
+            method: 'POST',
+            credentials: 'include',
+        });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) {
+            setMsg(gmailMsgEl, data.message || `Sync failed (${response.status})`, 'error');
+            return;
+        }
+        const found = data.events_found || 0;
+        setMsg(gmailMsgEl, found
+            ? `✉ Found ${found} event${found === 1 ? '' : 's'} — check the events page.`
+            : `Checked ${data.checked} new email${data.checked === 1 ? '' : 's'} — no new events this time.`,
+            'success');
+        loadGmailStatus();
+    } catch (error) {
+        console.error('Gmail sync failed:', error);
+        setMsg(gmailMsgEl, 'Could not reach the server.', 'error');
+    } finally {
+        btn.disabled = false;
+    }
+}
+
+async function disconnectGmail() {
+    setMsg(gmailMsgEl, '');
+    try {
+        const response = await fetch('/api/gmail', {
+            method: 'DELETE',
+            credentials: 'include',
+        });
+        if (!response.ok) {
+            setMsg(gmailMsgEl, 'Disconnect failed.', 'error');
+            return;
+        }
+        setMsg(gmailMsgEl, 'Gmail disconnected.', 'success');
+        gmailStatusEl.textContent = 'Not connected.';
+        showGmailButtons(false);
+    } catch (error) {
+        console.error('Gmail disconnect failed:', error);
+        setMsg(gmailMsgEl, 'Could not reach the server.', 'error');
     }
 }
 

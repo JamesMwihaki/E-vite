@@ -162,3 +162,29 @@ ALTER TABLE agent_runs ADD CONSTRAINT agent_runs_status_check
 INSERT INTO users (username, email, first_name, last_name)
 VALUES ('evite_scout', 'scout@evite.internal', 'E-vite', 'Scout')
 ON CONFLICT DO NOTHING;
+
+-- Mail scout: one connected Gmail inbox per user (read-only OAuth). The
+-- refresh token lets the cron scan for event flyers; last_* columns power
+-- the profile page's status line.
+CREATE TABLE IF NOT EXISTS gmail_accounts (
+    id SERIAL PRIMARY KEY,
+    user_id INTEGER NOT NULL UNIQUE REFERENCES users(id) ON DELETE CASCADE,
+    email VARCHAR(255) NOT NULL,
+    refresh_token TEXT NOT NULL,
+    connected_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    last_synced_at TIMESTAMP,
+    last_status VARCHAR(20),
+    last_events_found INTEGER,
+    last_detail TEXT
+);
+
+-- Messages already scanned, so each email is analyzed exactly once.
+CREATE TABLE IF NOT EXISTS gmail_messages (
+    id SERIAL PRIMARY KEY,
+    account_id INTEGER NOT NULL REFERENCES gmail_accounts(id) ON DELETE CASCADE,
+    gmail_id TEXT NOT NULL,
+    subject VARCHAR(255),
+    events_found INTEGER DEFAULT 0,
+    processed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(account_id, gmail_id)
+);

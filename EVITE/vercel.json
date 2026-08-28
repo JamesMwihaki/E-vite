@@ -20,6 +20,7 @@
     }
   },
   "crons": [
-    { "path": "/api/agent/run", "schedule": "0 13 * * *" }
+    { "path": "/api/agent/run", "schedule": "0 13 * * *" },
+    { "path": "/api/gmail/run", "schedule": "30 13 * * *" }
   ]
 }

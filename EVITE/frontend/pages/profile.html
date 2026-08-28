@@ -187,6 +187,19 @@
         }
         .ascii-button:hover { background: #eee; }
 
+        .mail-scout-blurb {
+            font-size: 0.85em;
+            color: #555;
+            margin-bottom: 10px;
+        }
+        .mail-scout-status {
+            text-align: center;
+            margin-bottom: 12px;
+            font-size: 0.9em;
+        }
+        .mail-scout-status .connected-as { font-weight: bold; }
+        .mail-scout-buttons { gap: 10px; flex-wrap: wrap; }
+
         .message {
             text-align: center;
             margin-top: 8px;
@@ -310,9 +323,11 @@
             }
             .content > .section { border-top: 1px dashed #111; }
             .content > .section:first-child { border-top: none; }
+            /* Edit Profile spans the right column; avatar, stats, mail
+               scout, and password stack on the left rail. */
             .content > .section:nth-child(3) {
                 grid-column: 2;
-                grid-row: 1 / span 3;
+                grid-row: 1 / span 4;
                 border-top: none;
                 border-left: 1px dashed #111;
             }
@@ -426,6 +441,41 @@
                 </button>
             </div>
             <div class="message" id="profile_message"></div>
+        </div>
+
+        <div class="section">
+            <div class="section-label">Mail Scout</div>
+            <p class="mail-scout-blurb">
+                Connect your Gmail and the scout reads incoming event flyers
+                (school clubs, campus newsletters) and adds them to your
+                events page automatically. Read-only — it never sends,
+                labels, or deletes anything.
+            </p>
+            <div class="mail-scout-status" id="gmail_status">Checking…</div>
+            <div class="button-row mail-scout-buttons">
+                <button type="button" class="ascii-frame ascii-button" id="gmail_connect_btn" hidden>
+                    <span class="corner tl">+</span>
+                    <span class="corner tr">+</span>
+                    <span class="corner bl">+</span>
+                    <span class="corner br">+</span>
+                    [ ✉ CONNECT GMAIL ]
+                </button>
+                <button type="button" class="ascii-frame ascii-button" id="gmail_sync_btn" hidden>
+                    <span class="corner tl">+</span>
+                    <span class="corner tr">+</span>
+                    <span class="corner bl">+</span>
+                    <span class="corner br">+</span>
+                    [ ⟳ CHECK NOW ]
+                </button>
+                <button type="button" class="ascii-frame ascii-button" id="gmail_disconnect_btn" hidden>
+                    <span class="corner tl">+</span>
+                    <span class="corner tr">+</span>
+                    <span class="corner bl">+</span>
+                    <span class="corner br">+</span>
+                    [ ✕ DISCONNECT ]
+                </button>
+            </div>
+            <div class="message" id="gmail_message"></div>
         </div>
 
         <div class="section">
