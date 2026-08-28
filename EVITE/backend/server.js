@@ -18,6 +18,7 @@ const usersRouter = require('./routes/users');
 const friendsRouter = require('./routes/friends');
 const agentRouter = require('./routes/agent');
 const chatRouter = require('./routes/chat');
+const gmailRouter = require('./routes/gmail');
 
 const port = process.env.PORT || 3001;
 const isProd = process.env.NODE_ENV === 'production';
@@ -69,6 +70,7 @@ app.use(rsvpRouter);
 app.use(invitationsRouter);
 app.use(agentRouter);
 app.use(chatRouter);
+app.use(gmailRouter);
 
 app.post('/api/ai_input', async (req, res) => {
     if (!genAI) {
